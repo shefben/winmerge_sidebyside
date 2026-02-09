@@ -573,6 +573,21 @@
     <ClCompile Include="DirFrame.cpp">
       <Filter>MFCGui\MDIChild\FolderCompare\Source Files</Filter>
     </ClCompile>
+    <ClCompile Include="DirPaneView.cpp">
+      <Filter>MFCGui\MDIChild\FolderCompare\Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="DirSideBySideCoordinator.cpp">
+      <Filter>MFCGui\MDIChild\FolderCompare\Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="DirSideBySideHeaderBar.cpp">
+      <Filter>MFCGui\MDIChild\FolderCompare\Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="DirSideBySideFilterBar.cpp">
+      <Filter>MFCGui\MDIChild\FolderCompare\Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="DirGutterView.cpp">
+      <Filter>MFCGui\MDIChild\FolderCompare\Source Files</Filter>
+    </ClCompile>
     <ClCompile Include="DirDoc.cpp">
       <Filter>MFCGui\MDIChild\FolderCompare\Source Files</Filter>
     </ClCompile>
@@ -1308,6 +1323,21 @@
       <Filter>MFCGui\MDIChild\FolderCompare\Header Files</Filter>
     </ClInclude>
     <ClInclude Include="DirFrame.h">
+      <Filter>MFCGui\MDIChild\FolderCompare\Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="DirPaneView.h">
+      <Filter>MFCGui\MDIChild\FolderCompare\Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="DirSideBySideCoordinator.h">
+      <Filter>MFCGui\MDIChild\FolderCompare\Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="DirSideBySideHeaderBar.h">
+      <Filter>MFCGui\MDIChild\FolderCompare\Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="DirSideBySideFilterBar.h">
+      <Filter>MFCGui\MDIChild\FolderCompare\Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="DirGutterView.h">
       <Filter>MFCGui\MDIChild\FolderCompare\Header Files</Filter>
     </ClInclude>
     <ClInclude Include="DirView.h">

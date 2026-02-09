@@ -70,6 +70,31 @@ inline const String OPT_DIRVIEW3_COLUMN_ORDERS {_T("DirView3/ColumnOrders"s)};
 inline const String OPT_DIRVIEW3_COLUMN_WIDTHS {_T("DirView3/ColumnWidths"s)};
 
 inline const String OPT_ADDITIONAL_PROPERTIES {_T("Settings/AdditionalProperties"s)};
+inline const String OPT_DIRVIEW_SIDEBYSIDE_MODE {_T("Settings/DirViewSideBySideMode"s)};
+inline const String OPT_DIRVIEW_SXS_LEFT_COLUMN_ORDERS {_T("DirViewSxS/LeftColumnOrders"s)};
+inline const String OPT_DIRVIEW_SXS_LEFT_COLUMN_WIDTHS {_T("DirViewSxS/LeftColumnWidths"s)};
+inline const String OPT_DIRVIEW_SXS_RIGHT_COLUMN_ORDERS {_T("DirViewSxS/RightColumnOrders"s)};
+inline const String OPT_DIRVIEW_SXS_RIGHT_COLUMN_WIDTHS {_T("DirViewSxS/RightColumnWidths"s)};
+inline const String OPT_DIRVIEW_SXS_SPLITTER_POS {_T("DirViewSxS/SplitterPos"s)};
+inline const String OPT_DIRVIEW_SXS_SHOW_GUTTER {_T("DirViewSxS/ShowGutter"s)};
+inline const String OPT_DIRVIEW_SXS_SHOW_FILTER_BAR {_T("DirViewSxS/ShowFilterBar"s)};
+inline const String OPT_DIRVIEW_SXS_AUTO_REFRESH {_T("DirViewSxS/AutoRefresh"s)};
+inline const String OPT_DIRVIEW_SXS_SUPPRESS_FILTERS {_T("DirViewSxS/SuppressFilters"s)};
+inline const String OPT_DIRVIEW_SXS_FLATTEN_MODE {_T("DirViewSxS/FlattenMode"s)};
+inline const String OPT_DIRVIEW_SXS_NAME_FILTER {_T("DirViewSxS/NameFilter"s)};
+inline const String OPT_DIRVIEW_SXS_ROW_STRIPES {_T("DirViewSxS/RowStripes"s)};
+inline const String OPT_DIRVIEW_SXS_IGNORE_FOLDER_STRUCTURE {_T("DirViewSxS/IgnoreFolderStructure"s)};
+inline const String OPT_DIRVIEW_SXS_AUTO_EXPAND_MODE {_T("DirViewSxS/AutoExpandMode"s)};
+inline const String OPT_DIRVIEW_SXS_SHOW_VERSION_COL {_T("DirViewSxS/ShowVersionCol"s)};
+inline const String OPT_DIRVIEW_SXS_SHOW_OWNER_COL {_T("DirViewSxS/ShowOwnerCol"s)};
+inline const String OPT_DIRVIEW_SXS_ADV_FILTER_DATE_FROM {_T("DirViewSxS/AdvFilterDateFrom"s)};
+inline const String OPT_DIRVIEW_SXS_ADV_FILTER_DATE_TO {_T("DirViewSxS/AdvFilterDateTo"s)};
+inline const String OPT_DIRVIEW_SXS_ADV_FILTER_SIZE_MIN {_T("DirViewSxS/AdvFilterSizeMin"s)};
+inline const String OPT_DIRVIEW_SXS_ADV_FILTER_SIZE_MAX {_T("DirViewSxS/AdvFilterSizeMax"s)};
+inline const String OPT_DIRVIEW_SXS_ADV_FILTER_ATTR {_T("DirViewSxS/AdvFilterAttr"s)};
+inline const String OPT_DIRVIEW_SXS_KEY_BINDINGS {_T("DirViewSxS/KeyBindings"s)};
+inline const String OPT_CMP_IGNORE_SMALL_FILETIME_SECS {_T("Settings/IgnoreSmallFileTimeSecs"s)};
+inline const String OPT_CMP_SXS_CRC_MODE {_T("Settings/SxsCrcCompareMode"s)};
 
 // Window/Pane
 inline const String OPT_ACTIVE_FRAME_MAX {_T("Settings/ActiveFrameMax"s)};
@@ -204,6 +229,22 @@ inline const String OPT_DIRCLR_ITEM_FILTERED {_T("Settings/DirItemFilteredColor"
 inline const String OPT_DIRCLR_ITEM_FILTERED_TEXT {_T("Settings/DirItemFilteredTextColor"s)};
 // The background color
 inline const String OPT_DIRCLR_MARGIN {_T("Settings/DirMarginColor"s)};
+// The item newer background color (SxS mode)
+inline const String OPT_DIRCLR_ITEM_NEWER {_T("Settings/DirItemNewerColor"s)};
+// The item newer text color
+inline const String OPT_DIRCLR_ITEM_NEWER_TEXT {_T("Settings/DirItemNewerTextColor"s)};
+// The item older background color (SxS mode)
+inline const String OPT_DIRCLR_ITEM_OLDER {_T("Settings/DirItemOlderColor"s)};
+// The item older text color
+inline const String OPT_DIRCLR_ITEM_OLDER_TEXT {_T("Settings/DirItemOlderTextColor"s)};
+// The item orphan background color (SxS mode)
+inline const String OPT_DIRCLR_ITEM_ORPHAN {_T("Settings/DirItemOrphanColor"s)};
+// The item orphan text color
+inline const String OPT_DIRCLR_ITEM_ORPHAN_TEXT {_T("Settings/DirItemOrphanTextColor"s)};
+// The item suppressed-filter background color (SxS mode)
+inline const String OPT_DIRCLR_ITEM_SUPPRESSED {_T("Settings/DirItemSuppressedColor"s)};
+// The item suppressed-filter text color
+inline const String OPT_DIRCLR_ITEM_SUPPRESSED_TEXT {_T("Settings/DirItemSuppressedTextColor"s)};
 // Use dir compare coloring?
 inline const String OPT_DIRCLR_USE_COLORS {_T("Settings/UseDirCompareColors"s)};
 

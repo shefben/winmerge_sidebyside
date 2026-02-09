@@ -25,10 +25,12 @@ public:
 	TimeSizeCompare();
 	~TimeSizeCompare();
 	void SetAdditionalOptions(bool ignoreSmallDiff);
+	void SetSmallTimeDiffSeconds(int seconds) { m_smallTimeDiffSeconds = seconds; }
 	int CompareFiles(int compMethod, int nfiles, const DIFFITEM &di) const;
 
 private:
 	bool m_ignoreSmallDiff;
+	int m_smallTimeDiffSeconds;
 };
 
 } // namespace CompareEngines

@@ -24,6 +24,9 @@
 #include "FilterEngine/FilterExpression.h"
 #include "Logger.h"
 #include "I18n.h"
+#include "OptionsDef.h"
+#include "OptionsMgr.h"
+#include "MergeApp.h"
 #include "DebugNew.h"
 
 using CompareEngines::ByteCompare;
@@ -445,6 +448,7 @@ exitPrepAndCompare:
 			m_pTimeSizeCompare.reset(new TimeSizeCompare());
 
 		m_pTimeSizeCompare->SetAdditionalOptions(m_pCtxt->m_bIgnoreSmallTimeDiff);
+		m_pTimeSizeCompare->SetSmallTimeDiffSeconds(GetOptionsMgr()->GetInt(OPT_CMP_IGNORE_SMALL_FILETIME_SECS));
 		code = m_pTimeSizeCompare->CompareFiles(nCompMethod, m_pCtxt->GetCompareDirs(), di);
 		if (DIFFCODE::isResultError(code))
 			LogError(di);

@@ -18,6 +18,8 @@
 #endif
 #include "Merge.h"
 #include "IMergeDoc.h"
+#include "DirPaneView.h"
+#include "DirSideBySideCoordinator.h"
 #include "CompareOptions.h"
 #include "UnicodeString.h"
 #include "CompareStats.h"
@@ -70,6 +72,8 @@ IMPLEMENT_DYNCREATE(CDirDoc, CDocument)
 CDirDoc::CDirDoc()
 : m_pCtxt(nullptr)
 , m_pDirView(nullptr)
+, m_bSideBySideMode(false)
+, m_pCoordinator(nullptr)
 , m_pCompareStats(nullptr)
 , m_bMarkedRescan(false)
 , m_pTempPathContext(nullptr)
@@ -161,10 +165,15 @@ void CDirDoc::InitCompare(const PathContext & paths, bool bRecursive, CTempPathC
 		Sleep(50);
 	}
 
-	m_pDirView->DeleteAllDisplayItems();
+	if (m_pDirView)
+		m_pDirView->DeleteAllDisplayItems();
+	else if (m_pCoordinator)
+	{
+		// SxS mode: coordinator handles clearing
+	}
 	// Anything that can go wrong here will yield an exception.
 	// Default implementation of operator new() never returns `nullptr`.
-	
+
 	if (m_pCompareStats == nullptr)
 		m_pCompareStats.reset(new CompareStats(m_nDirs));
 
@@ -223,7 +232,10 @@ void CDirDoc::DiffThreadCallback(int& state)
 {
 	if (state == CDiffThread::EVENT_COMPARE_COMPLETED)
 		m_elapsed = clock() - m_compareStart;
-	PostMessage(m_pDirView->GetSafeHwnd(), MSG_UI_UPDATE, state, false);
+	if (m_pDirView)
+		PostMessage(m_pDirView->GetSafeHwnd(), MSG_UI_UPDATE, state, false);
+	else if (m_bSideBySideMode && m_pCoordinator && m_pCoordinator->GetLeftPaneView())
+		PostMessage(m_pCoordinator->GetLeftPaneView()->GetSafeHwnd(), MSG_UI_UPDATE, state, false);
 }
 
 void CDirDoc::InitDiffContext(CDiffContext *pCtxt)
@@ -346,7 +358,19 @@ void CDirDoc::Rescan()
 	if (m_pCtxt == nullptr)
 		return;
 
-	CDirFrame *pf = m_pDirView->GetParentFrame();
+	CDirFrame *pf = nullptr;
+	if (m_pDirView)
+		pf = m_pDirView->GetParentFrame();
+	else if (m_bSideBySideMode && m_pCoordinator)
+	{
+		// In SxS mode, get frame from coordinator's pane views
+		CDirFrame *pFrame = static_cast<CDirFrame*>(
+			static_cast<CView*>(m_pCoordinator->GetLeftPaneView())->GetParentFrame());
+		pf = pFrame;
+	}
+
+	if (pf == nullptr)
+		return;
 
 	// If we're already doing a rescan, bail out
 	UINT threadState = m_diffThread.GetThreadState();
@@ -367,7 +391,14 @@ void CDirDoc::Rescan()
 	}
 
 	if (!m_bGeneratingReport)
-		m_pDirView->DeleteAllDisplayItems();
+	{
+		if (m_pDirView)
+			m_pDirView->DeleteAllDisplayItems();
+		else if (m_pCoordinator)
+		{
+			// SxS mode: coordinator pane views clear themselves
+		}
+	}
 	// Don't clear if only scanning selected items
 	if (!m_bMarkedRescan && !m_bGeneratingReport)
 	{
@@ -382,23 +413,44 @@ void CDirDoc::Rescan()
 
 	auto* pHeaderBar = pf->GetHeaderInterface();
 	pHeaderBar->SetPaneCount(m_nDirs);
-	pHeaderBar->SetOnSetFocusCallback([&](int pane) {
-		m_pDirView->SetActivePane(pane);
-		GetOptionsMgr()->SaveOption(OPT_ACTIVE_PANE, pane);
-	});
-	pHeaderBar->SetOnCaptionChangedCallback([&](int pane, const String& sText) {
-		m_strDesc[pane] = sText;
-		UpdateHeaderPath(pane);
-		m_pDirView->SetFocus();
-	});
-	pHeaderBar->SetOnFolderSelectedCallback([&](int pane, const String& sFolderpath) {
-		PathContext paths = m_pCtxt->GetNormalizedPaths();
-		paths.SetPath(pane, sFolderpath);
-		m_strDesc[pane].clear();
-		m_pDirView->SetFocus();
-		InitCompare(paths, m_pCtxt->m_bRecursive, nullptr);
-		Rescan();
-	});
+	if (m_pDirView)
+	{
+		pHeaderBar->SetOnSetFocusCallback([&](int pane) {
+			m_pDirView->SetActivePane(pane);
+			GetOptionsMgr()->SaveOption(OPT_ACTIVE_PANE, pane);
+		});
+		pHeaderBar->SetOnCaptionChangedCallback([&](int pane, const String& sText) {
+			m_strDesc[pane] = sText;
+			UpdateHeaderPath(pane);
+			m_pDirView->SetFocus();
+		});
+		pHeaderBar->SetOnFolderSelectedCallback([&](int pane, const String& sFolderpath) {
+			PathContext paths = m_pCtxt->GetNormalizedPaths();
+			paths.SetPath(pane, sFolderpath);
+			m_strDesc[pane].clear();
+			m_pDirView->SetFocus();
+			InitCompare(paths, m_pCtxt->m_bRecursive, nullptr);
+			Rescan();
+		});
+	}
+	else if (m_bSideBySideMode && m_pCoordinator)
+	{
+		pHeaderBar->SetOnSetFocusCallback([&](int pane) {
+			m_pCoordinator->SetActivePane(pane);
+			GetOptionsMgr()->SaveOption(OPT_ACTIVE_PANE, pane);
+		});
+		pHeaderBar->SetOnCaptionChangedCallback([&](int pane, const String& sText) {
+			m_strDesc[pane] = sText;
+			UpdateHeaderPath(pane);
+		});
+		pHeaderBar->SetOnFolderSelectedCallback([&](int pane, const String& sFolderpath) {
+			PathContext paths = m_pCtxt->GetNormalizedPaths();
+			paths.SetPath(pane, sFolderpath);
+			m_strDesc[pane].clear();
+			InitCompare(paths, m_pCtxt->m_bRecursive, nullptr);
+			Rescan();
+		});
+	}
 	for (int nIndex = 0; nIndex < m_nDirs; nIndex++)
 	{
 		UpdateHeaderPath(nIndex);
@@ -407,8 +459,16 @@ void CDirDoc::Rescan()
 	}
 	pf->GetHeaderInterface()->Resize();
 	int nPane = GetOptionsMgr()->GetInt(OPT_ACTIVE_PANE);
-	m_pDirView->SetActivePane((nPane >= 0 && nPane < m_nDirs) ? nPane : 0);
-	m_pDirView->GetParentFrame()->SetStatus(_("Comparing items...").c_str());
+	if (m_pDirView)
+	{
+		m_pDirView->SetActivePane((nPane >= 0 && nPane < m_nDirs) ? nPane : 0);
+		m_pDirView->GetParentFrame()->SetStatus(_("Comparing items...").c_str());
+	}
+	else if (m_bSideBySideMode && m_pCoordinator)
+	{
+		m_pCoordinator->SetActivePane((nPane >= 0 && nPane < m_nDirs) ? nPane : 0);
+		pf->SetStatus(_("Comparing items...").c_str());
+	}
 
 	// Show current compare method name and active filter name in statusbar
 	pf->SetFilterStatusDisplay(theApp.GetGlobalFileFilter()->GetMaskOrExpression().c_str());
@@ -514,13 +574,19 @@ void CDirDoc::Rescan()
  */
 void CDirDoc::Redisplay()
 {
-	if (m_pDirView == nullptr)
-		return;
-
 	// Do not redisplay an empty CDirView
 	// Not only does it not have results, but AddSpecialItems will crash
 	// trying to dereference null context pointer to get to paths
 	if (!HasDiffs())
+		return;
+
+	if (m_bSideBySideMode && m_pCoordinator)
+	{
+		m_pCoordinator->Redisplay();
+		return;
+	}
+
+	if (m_pDirView == nullptr)
 		return;
 
 	m_pDirView->Redisplay();
@@ -528,6 +594,8 @@ void CDirDoc::Redisplay()
 
 CDirView * CDirDoc::GetMainView() const
 {
+	if (m_bSideBySideMode)
+		return nullptr;
 	CDirView *pView = nullptr;
 	if (POSITION pos = GetFirstViewPosition())
 	{
@@ -550,11 +618,19 @@ void CDirDoc::ReloadItemStatus(DIFFITEM *diffPos, int idx)
 	// in case just copied (into existence) or modified
 	m_pCtxt->UpdateStatusFromDisk(diffPos, idx);
 
-	int nIdx = m_pDirView->GetItemIndex(diffPos);
-	if (nIdx != -1)
+	if (m_pDirView)
 	{
-		// Update view
-		m_pDirView->UpdateDiffItemStatus(nIdx);
+		int nIdx = m_pDirView->GetItemIndex(diffPos);
+		if (nIdx != -1)
+		{
+			// Update view
+			m_pDirView->UpdateDiffItemStatus(nIdx);
+		}
+	}
+	else if (m_bSideBySideMode && m_pCoordinator)
+	{
+		// In SxS mode, just redisplay
+		Redisplay();
 	}
 }
 
@@ -690,7 +766,14 @@ void CDirDoc::UpdateChangedItem(const PathContext &paths,
 void CDirDoc::CompareReady()
 {
 	// Close and destroy the dialog after compare
-	m_pDirView->GetParentFrame()->HideProgressBar();
+	CDirFrame *pf = nullptr;
+	if (m_pDirView)
+		pf = m_pDirView->GetParentFrame();
+	else if (m_bSideBySideMode && m_pCoordinator)
+		pf = static_cast<CDirFrame*>(
+			static_cast<CView*>(m_pCoordinator->GetLeftPaneView())->GetParentFrame());
+	if (pf)
+		pf->HideProgressBar();
 }
 
 /**
@@ -714,8 +797,14 @@ void CDirDoc::RefreshOptions()
  */
 void CDirDoc::UpdateHeaderPath(int nIndex)
 {
-	CDirFrame *pf = m_pDirView->GetParentFrame();
-	ASSERT(pf != nullptr);
+	CDirFrame *pf = nullptr;
+	if (m_pDirView)
+		pf = m_pDirView->GetParentFrame();
+	else if (m_bSideBySideMode && m_pCoordinator)
+		pf = static_cast<CDirFrame*>(
+			static_cast<CView*>(m_pCoordinator->GetLeftPaneView())->GetParentFrame());
+	if (pf == nullptr)
+		return;
 	String sText;
 
 	if (!m_strDesc[nIndex].empty())
@@ -841,7 +930,7 @@ void CDirDoc::ApplyDisplayRoot(int nIndex, String &sText)
  */
 void CDirDoc::SetTitle(LPCTSTR lpszTitle)
 {
-	if (m_pDirView == nullptr)
+	if (m_pDirView == nullptr && !m_bSideBySideMode)
 		return;
 
 	if (lpszTitle != nullptr)
@@ -1115,7 +1204,12 @@ bool CDirDoc::CompareFilesIfFilesAreLarge(int nFiles, const FileLocation ifilelo
 
 DirCompProgressBar* CDirDoc::GetCompProgressBar()
 {
-	CDirFrame *pf = m_pDirView->GetParentFrame();
+	CDirFrame *pf = nullptr;
+	if (m_pDirView)
+		pf = m_pDirView->GetParentFrame();
+	else if (m_bSideBySideMode && m_pCoordinator)
+		pf = static_cast<CDirFrame*>(
+			static_cast<CView*>(m_pCoordinator->GetLeftPaneView())->GetParentFrame());
 	if (pf == nullptr)
 		return nullptr;
 	return pf->GetCompProgressBar();

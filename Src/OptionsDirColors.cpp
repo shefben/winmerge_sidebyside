@@ -25,6 +25,15 @@ void Init(COptionsMgr *pOptionsMgr)
 	pOptionsMgr->InitOption(OPT_DIRCLR_ITEM_FILTERED_TEXT, defaultTextColor);
 	pOptionsMgr->InitOption(OPT_DIRCLR_MARGIN, (int)GetSysColor(COLOR_WINDOW));
 	pOptionsMgr->InitOption(OPT_DIRCLR_USE_COLORS, true);
+	// SxS mode colors
+	pOptionsMgr->InitOption(OPT_DIRCLR_ITEM_NEWER, (int)CEColor(255,220,220));    // Light red bg
+	pOptionsMgr->InitOption(OPT_DIRCLR_ITEM_NEWER_TEXT, (int)CEColor(192,0,0));    // Dark red text
+	pOptionsMgr->InitOption(OPT_DIRCLR_ITEM_OLDER, (int)CEColor(240,240,240));    // Light gray bg
+	pOptionsMgr->InitOption(OPT_DIRCLR_ITEM_OLDER_TEXT, (int)CEColor(128,128,128));// Gray text
+	pOptionsMgr->InitOption(OPT_DIRCLR_ITEM_ORPHAN, (int)CEColor(230,210,240));   // Light purple bg
+	pOptionsMgr->InitOption(OPT_DIRCLR_ITEM_ORPHAN_TEXT, (int)CEColor(128,0,128));  // Purple text
+	pOptionsMgr->InitOption(OPT_DIRCLR_ITEM_SUPPRESSED, (int)CEColor(210,240,240));// Light teal bg
+	pOptionsMgr->InitOption(OPT_DIRCLR_ITEM_SUPPRESSED_TEXT, (int)CEColor(0,128,128));// Teal text
 }
 
 void Load(const COptionsMgr *pOptionsMgr, DIRCOLORSETTINGS& colors)
@@ -38,6 +47,14 @@ void Load(const COptionsMgr *pOptionsMgr, DIRCOLORSETTINGS& colors)
 	colors.clrDirItemFiltered = pOptionsMgr->GetInt(OPT_DIRCLR_ITEM_FILTERED);
 	colors.clrDirItemFilteredText = pOptionsMgr->GetInt(OPT_DIRCLR_ITEM_FILTERED_TEXT);
 	colors.clrDirMargin = pOptionsMgr->GetInt(OPT_DIRCLR_MARGIN);
+	colors.clrDirItemNewer = pOptionsMgr->GetInt(OPT_DIRCLR_ITEM_NEWER);
+	colors.clrDirItemNewerText = pOptionsMgr->GetInt(OPT_DIRCLR_ITEM_NEWER_TEXT);
+	colors.clrDirItemOlder = pOptionsMgr->GetInt(OPT_DIRCLR_ITEM_OLDER);
+	colors.clrDirItemOlderText = pOptionsMgr->GetInt(OPT_DIRCLR_ITEM_OLDER_TEXT);
+	colors.clrDirItemOrphan = pOptionsMgr->GetInt(OPT_DIRCLR_ITEM_ORPHAN);
+	colors.clrDirItemOrphanText = pOptionsMgr->GetInt(OPT_DIRCLR_ITEM_ORPHAN_TEXT);
+	colors.clrDirItemSuppressed = pOptionsMgr->GetInt(OPT_DIRCLR_ITEM_SUPPRESSED);
+	colors.clrDirItemSuppressedText = pOptionsMgr->GetInt(OPT_DIRCLR_ITEM_SUPPRESSED_TEXT);
 }
 
 void Save(COptionsMgr *pOptionsMgr, const DIRCOLORSETTINGS& colors)
@@ -51,6 +68,14 @@ void Save(COptionsMgr *pOptionsMgr, const DIRCOLORSETTINGS& colors)
 	pOptionsMgr->SaveOption(OPT_DIRCLR_ITEM_FILTERED, (int)colors.clrDirItemFiltered);
 	pOptionsMgr->SaveOption(OPT_DIRCLR_ITEM_FILTERED_TEXT, (int)colors.clrDirItemFilteredText);
 	pOptionsMgr->SaveOption(OPT_DIRCLR_MARGIN, (int)colors.clrDirMargin);
+	pOptionsMgr->SaveOption(OPT_DIRCLR_ITEM_NEWER, (int)colors.clrDirItemNewer);
+	pOptionsMgr->SaveOption(OPT_DIRCLR_ITEM_NEWER_TEXT, (int)colors.clrDirItemNewerText);
+	pOptionsMgr->SaveOption(OPT_DIRCLR_ITEM_OLDER, (int)colors.clrDirItemOlder);
+	pOptionsMgr->SaveOption(OPT_DIRCLR_ITEM_OLDER_TEXT, (int)colors.clrDirItemOlderText);
+	pOptionsMgr->SaveOption(OPT_DIRCLR_ITEM_ORPHAN, (int)colors.clrDirItemOrphan);
+	pOptionsMgr->SaveOption(OPT_DIRCLR_ITEM_ORPHAN_TEXT, (int)colors.clrDirItemOrphanText);
+	pOptionsMgr->SaveOption(OPT_DIRCLR_ITEM_SUPPRESSED, (int)colors.clrDirItemSuppressed);
+	pOptionsMgr->SaveOption(OPT_DIRCLR_ITEM_SUPPRESSED_TEXT, (int)colors.clrDirItemSuppressedText);
 }
 
 }}

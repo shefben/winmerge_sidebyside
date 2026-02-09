@@ -16,6 +16,14 @@ struct DIRCOLORSETTINGS
 	CEColor	clrDirItemFiltered;			/**< Item filtered background color */
 	CEColor	clrDirItemFilteredText;		/**< Item filtered text color */
 	CEColor	clrDirMargin;				/**< Background color */
+	CEColor	clrDirItemNewer;			/**< Item newer background color (SxS) */
+	CEColor	clrDirItemNewerText;		/**< Item newer text color (SxS) */
+	CEColor	clrDirItemOlder;			/**< Item older background color (SxS) */
+	CEColor	clrDirItemOlderText;		/**< Item older text color (SxS) */
+	CEColor	clrDirItemOrphan;			/**< Item orphan background color (SxS) */
+	CEColor	clrDirItemOrphanText;		/**< Item orphan text color (SxS) */
+	CEColor	clrDirItemSuppressed;		/**< Item suppressed-filter background color (SxS) */
+	CEColor	clrDirItemSuppressedText;	/**< Item suppressed-filter text color (SxS) */
 };
 
 class COptionsMgr;

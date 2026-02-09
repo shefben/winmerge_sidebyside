@@ -20,6 +20,8 @@
 #include "IDirDoc.h"
 
 class CDirView;
+class CDirPaneView;
+class CDirSideBySideCoordinator;
 struct IMergeDoc;
 typedef CTypedPtrList<CPtrList, IMergeDoc *> MergeDocPtrList;
 class DirDocFilterGlobal;
@@ -56,6 +58,10 @@ public:
 	bool CloseMergeDocs();
 	CDirView * GetMainView() const;
 
+	bool IsSideBySideMode() const { return m_bSideBySideMode; }
+	void SetSideBySideMode(bool bMode) { m_bSideBySideMode = bMode; }
+	void SetCoordinator(CDirSideBySideCoordinator *pCoordinator) { m_pCoordinator = pCoordinator; }
+
 // Overrides
 	// ClassWizard generated virtual function overrides
 	//{{AFX_VIRTUAL(CDirDoc)
@@ -84,7 +90,7 @@ public:
 	bool GetGeneratingReport() const { return m_bGeneratingReport; }
 	void SetGeneratingReport(bool bGeneratingReport) { m_bGeneratingReport = bGeneratingReport; }
 	void SetReport(DirCmpReport* pReport) { m_pReport.reset(pReport);  }
-	bool HasDirView() const { return m_pDirView != nullptr; }
+	bool HasDirView() const { return m_pDirView != nullptr || m_bSideBySideMode; }
 	void RefreshOptions();
 	void CompareReady();
 	clock_t GetElapsedTime() const { return m_elapsed; }
@@ -149,6 +155,8 @@ protected:
 private:
 	std::unique_ptr<CDiffContext> m_pCtxt; /**< Pointer to diff-data */
 	CDirView *m_pDirView; /**< Pointer to GUI */
+	bool m_bSideBySideMode; /**< True when using side-by-side pane mode */
+	CDirSideBySideCoordinator *m_pCoordinator; /**< Coordinator for SxS mode (owned by CDirFrame) */
 	std::unique_ptr<CompareStats> m_pCompareStats; /**< Compare statistics */
 	MergeDocPtrList m_MergeDocs; /**< List of file compares opened from this compare */
 	bool m_bRO[3]; /**< Is left/middle/right side read-only */

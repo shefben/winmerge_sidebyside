@@ -17,6 +17,7 @@ namespace CompareEngines
 
 TimeSizeCompare::TimeSizeCompare()
 		: m_ignoreSmallDiff(false)
+		, m_smallTimeDiffSeconds(SmallTimeDiff)
 {
 }
 
@@ -65,9 +66,10 @@ int TimeSizeCompare::CompareFiles(int compMethod, int nfiles, const DIFFITEM &di
 		{
 			// If option to ignore small timediffs (couple of seconds)
 			// is set, decrease absolute difference by allowed diff
-			nTimeDiff   -= SmallTimeDiff * Timestamp::resolution();
-			nTimeDiff12 -= SmallTimeDiff * Timestamp::resolution();
-			nTimeDiff02 -= SmallTimeDiff * Timestamp::resolution();
+			const int64_t tolerance = static_cast<int64_t>(m_smallTimeDiffSeconds) * Timestamp::resolution();
+			nTimeDiff   -= tolerance;
+			nTimeDiff12 -= tolerance;
+			nTimeDiff02 -= tolerance;
 		}
 		if (nTimeDiff <= 0 && nTimeDiff12 <= 0)
 			code = DIFFCODE::SAME;

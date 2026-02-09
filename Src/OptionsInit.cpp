@@ -110,6 +110,31 @@ void Init(COptionsMgr *pOptions)
 	pOptions->InitOption(OPT_DIRVIEW3_COLUMN_WIDTHS, _T(""));
 
 	pOptions->InitOption(OPT_ADDITIONAL_PROPERTIES, _T(""));
+	pOptions->InitOption(OPT_DIRVIEW_SIDEBYSIDE_MODE, false);
+	pOptions->InitOption(OPT_DIRVIEW_SXS_LEFT_COLUMN_ORDERS, _T(""));
+	pOptions->InitOption(OPT_DIRVIEW_SXS_LEFT_COLUMN_WIDTHS, _T(""));
+	pOptions->InitOption(OPT_DIRVIEW_SXS_RIGHT_COLUMN_ORDERS, _T(""));
+	pOptions->InitOption(OPT_DIRVIEW_SXS_RIGHT_COLUMN_WIDTHS, _T(""));
+	pOptions->InitOption(OPT_DIRVIEW_SXS_SPLITTER_POS, 0);
+	pOptions->InitOption(OPT_DIRVIEW_SXS_SHOW_GUTTER, true);
+	pOptions->InitOption(OPT_DIRVIEW_SXS_SHOW_FILTER_BAR, true);
+	pOptions->InitOption(OPT_DIRVIEW_SXS_AUTO_REFRESH, true);
+	pOptions->InitOption(OPT_DIRVIEW_SXS_SUPPRESS_FILTERS, false);
+	pOptions->InitOption(OPT_DIRVIEW_SXS_FLATTEN_MODE, false);
+	pOptions->InitOption(OPT_DIRVIEW_SXS_NAME_FILTER, _T(""));
+	pOptions->InitOption(OPT_DIRVIEW_SXS_ROW_STRIPES, false);
+	pOptions->InitOption(OPT_DIRVIEW_SXS_IGNORE_FOLDER_STRUCTURE, false);
+	pOptions->InitOption(OPT_DIRVIEW_SXS_AUTO_EXPAND_MODE, 0, 0, 2);
+	pOptions->InitOption(OPT_DIRVIEW_SXS_SHOW_VERSION_COL, false);
+	pOptions->InitOption(OPT_DIRVIEW_SXS_SHOW_OWNER_COL, false);
+	pOptions->InitOption(OPT_DIRVIEW_SXS_ADV_FILTER_DATE_FROM, _T(""));
+	pOptions->InitOption(OPT_DIRVIEW_SXS_ADV_FILTER_DATE_TO, _T(""));
+	pOptions->InitOption(OPT_DIRVIEW_SXS_ADV_FILTER_SIZE_MIN, (int)-1);
+	pOptions->InitOption(OPT_DIRVIEW_SXS_ADV_FILTER_SIZE_MAX, (int)-1);
+	pOptions->InitOption(OPT_DIRVIEW_SXS_ADV_FILTER_ATTR, _T(""));
+	pOptions->InitOption(OPT_DIRVIEW_SXS_KEY_BINDINGS, _T(""));
+	pOptions->InitOption(OPT_CMP_IGNORE_SMALL_FILETIME_SECS, (int)2, 0, 120);
+	pOptions->InitOption(OPT_CMP_SXS_CRC_MODE, false);
 
 	pOptions->InitOption(OPT_REPORTFILES_REPORTTYPE, 0, 0, 3);
 	pOptions->InitOption(OPT_REPORTFILES_COPYTOCLIPBOARD, false);

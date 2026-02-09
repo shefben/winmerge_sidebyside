@@ -486,6 +486,9 @@ BEGIN
         END
         MENUITEM "&Collapse All Subfolders",    ID_VIEW_COLLAPSE_ALLSUBDIRS
         MENUITEM SEPARATOR
+        MENUITEM "Side &by Side Folder View",  ID_VIEW_DIR_SIDEBYSIDE
+        MENUITEM "Color &Legend...",            ID_DIR_SXS_LEGEND
+        MENUITEM SEPARATOR
         MENUITEM "Select &Font...",             ID_VIEW_SELECTFONT
         MENUITEM "Use Default Font",            ID_VIEW_USEDEFAULTFONT
         MENUITEM SEPARATOR
@@ -534,6 +537,9 @@ BEGIN
         MENUITEM "Copy to L&eft\tAlt+Left",     ID_R2L
         MENUITEM SEPARATOR
         MENUITEM "&Delete\tDel",                ID_MERGE_DELETE
+        MENUITEM SEPARATOR
+        MENUITEM "&Swap Sides",                 ID_DIR_SXS_SWAP_SIDES
+        MENUITEM "C&ross-Compare Selected",     ID_DIR_SXS_CROSS_COMPARE
     END
     POPUP "&Tools"
     BEGIN

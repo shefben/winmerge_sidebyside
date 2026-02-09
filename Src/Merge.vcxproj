@@ -1139,6 +1139,11 @@
     <ClCompile Include="DirCompProgressBar.cpp" />
     <ClCompile Include="DirDoc.cpp" />
     <ClCompile Include="DirFrame.cpp" />
+    <ClCompile Include="DirPaneView.cpp" />
+    <ClCompile Include="DirSideBySideCoordinator.cpp" />
+    <ClCompile Include="DirSideBySideHeaderBar.cpp" />
+    <ClCompile Include="DirSideBySideFilterBar.cpp" />
+    <ClCompile Include="DirGutterView.cpp" />
     <ClCompile Include="DirItem.cpp">
       <PrecompiledHeader>Use</PrecompiledHeader>
       <PrecompiledHeaderFile>pch.h</PrecompiledHeaderFile>
@@ -1584,6 +1589,11 @@
     <ClInclude Include="DirCompProgressBar.h" />
     <ClInclude Include="DirDoc.h" />
     <ClInclude Include="DirFrame.h" />
+    <ClInclude Include="DirPaneView.h" />
+    <ClInclude Include="DirSideBySideCoordinator.h" />
+    <ClInclude Include="DirSideBySideHeaderBar.h" />
+    <ClInclude Include="DirSideBySideFilterBar.h" />
+    <ClInclude Include="DirGutterView.h" />
     <ClInclude Include="DirItem.h" />
     <ClInclude Include="DirReportTypes.h" />
     <ClInclude Include="DirScan.h" />
