@@ -194,6 +194,14 @@ public:
 	int m_nBinaryCompareLimit;
 
 	/**
+	 * Trust file metadata (timestamp + size) to skip content comparison.
+	 * When enabled, files with matching timestamps AND sizes are assumed
+	 * identical without reading content. Dramatically improves performance
+	 * for large directory comparisons.
+	 */
+	bool m_bTrustFileMetadata;
+
+	/**
 	 * Walk into unique folders and add contents.
 	 * This enables/disables walking into unique folders. If we don't walk into
 	 * unique folders, they are shown as such in folder compare results. If we

@@ -233,9 +233,21 @@ void CDirDoc::DiffThreadCallback(int& state)
 	if (state == CDiffThread::EVENT_COMPARE_COMPLETED)
 		m_elapsed = clock() - m_compareStart;
 	if (m_pDirView)
-		PostMessage(m_pDirView->GetSafeHwnd(), MSG_UI_UPDATE, state, false);
-	else if (m_bSideBySideMode && m_pCoordinator && m_pCoordinator->GetLeftPaneView())
-		PostMessage(m_pCoordinator->GetLeftPaneView()->GetSafeHwnd(), MSG_UI_UPDATE, state, false);
+	{
+		HWND hWnd = m_pDirView->GetSafeHwnd();
+		if (hWnd)
+			PostMessage(hWnd, MSG_UI_UPDATE, state, false);
+	}
+	else if (m_bSideBySideMode && m_pCoordinator)
+	{
+		CDirPaneView* pLeft = m_pCoordinator->GetLeftPaneView();
+		if (pLeft)
+		{
+			HWND hWnd = pLeft->GetSafeHwnd();
+			if (hWnd)
+				PostMessage(hWnd, MSG_UI_UPDATE, state, false);
+		}
+	}
 }
 
 void CDirDoc::InitDiffContext(CDiffContext *pCtxt)
@@ -256,6 +268,7 @@ void CDirDoc::InitDiffContext(CDiffContext *pCtxt)
 	pCtxt->m_bStopAfterFirstDiff = pOptions->GetBool(OPT_CMP_STOP_AFTER_FIRST);
 	pCtxt->m_nQuickCompareLimit = pOptions->GetInt(OPT_CMP_QUICK_LIMIT);
 	pCtxt->m_nBinaryCompareLimit = pOptions->GetInt(OPT_CMP_BINARY_LIMIT);
+	pCtxt->m_bTrustFileMetadata = pOptions->GetBool(OPT_CMP_TRUST_FILE_METADATA);
 	pCtxt->m_bPluginsEnabled = pOptions->GetBool(OPT_PLUGINS_ENABLED);
 	pCtxt->m_bWalkUniques = pOptions->GetBool(OPT_CMP_WALK_UNIQUE_DIRS);
 	pCtxt->m_bIgnoreReparsePoints = pOptions->GetBool(OPT_CMP_IGNORE_REPARSE_POINTS);
@@ -361,7 +374,7 @@ void CDirDoc::Rescan()
 	CDirFrame *pf = nullptr;
 	if (m_pDirView)
 		pf = m_pDirView->GetParentFrame();
-	else if (m_bSideBySideMode && m_pCoordinator)
+	else if (m_bSideBySideMode && m_pCoordinator && m_pCoordinator->GetLeftPaneView())
 	{
 		// In SxS mode, get frame from coordinator's pane views
 		CDirFrame *pFrame = static_cast<CDirFrame*>(
@@ -396,7 +409,13 @@ void CDirDoc::Rescan()
 			m_pDirView->DeleteAllDisplayItems();
 		else if (m_pCoordinator)
 		{
-			// SxS mode: coordinator pane views clear themselves
+			// SxS mode: must clear pane views before RemoveAll() frees DIFFITEMs
+			// to prevent dangling DIFFITEM pointer dereferences in LVN_GETDISPINFO
+			if (m_pCoordinator->GetLeftPaneView())
+				m_pCoordinator->GetLeftPaneView()->DeleteAllDisplayItems();
+			if (m_pCoordinator->GetRightPaneView())
+				m_pCoordinator->GetRightPaneView()->DeleteAllDisplayItems();
+			m_pCoordinator->ClearRowMapping();
 		}
 	}
 	// Don't clear if only scanning selected items
@@ -690,8 +709,11 @@ void CDirDoc::MergeDocClosing(IMergeDoc * pMergeDoc)
 		if (m_pCtxt == nullptr)
 			m_pDirView->PostMessage(WM_COMMAND, ID_FILE_CLOSE);
 	}
-	else if (m_MergeDocs.GetCount() == 0)
+	else if (!m_bSideBySideMode && m_MergeDocs.GetCount() == 0)
 	{
+		// Only self-delete when there is no folder comparison frame keeping us alive.
+		// In SxS mode the CDirFrame and its CDirPaneView instances are still active views
+		// of this document — MFC's standard view lifecycle will destroy us when the frame closes.
 		delete this;
 	}
 }
@@ -769,7 +791,7 @@ void CDirDoc::CompareReady()
 	CDirFrame *pf = nullptr;
 	if (m_pDirView)
 		pf = m_pDirView->GetParentFrame();
-	else if (m_bSideBySideMode && m_pCoordinator)
+	else if (m_bSideBySideMode && m_pCoordinator && m_pCoordinator->GetLeftPaneView())
 		pf = static_cast<CDirFrame*>(
 			static_cast<CView*>(m_pCoordinator->GetLeftPaneView())->GetParentFrame());
 	if (pf)
@@ -800,7 +822,7 @@ void CDirDoc::UpdateHeaderPath(int nIndex)
 	CDirFrame *pf = nullptr;
 	if (m_pDirView)
 		pf = m_pDirView->GetParentFrame();
-	else if (m_bSideBySideMode && m_pCoordinator)
+	else if (m_bSideBySideMode && m_pCoordinator && m_pCoordinator->GetLeftPaneView())
 		pf = static_cast<CDirFrame*>(
 			static_cast<CView*>(m_pCoordinator->GetLeftPaneView())->GetParentFrame());
 	if (pf == nullptr)
@@ -1207,7 +1229,7 @@ DirCompProgressBar* CDirDoc::GetCompProgressBar()
 	CDirFrame *pf = nullptr;
 	if (m_pDirView)
 		pf = m_pDirView->GetParentFrame();
-	else if (m_bSideBySideMode && m_pCoordinator)
+	else if (m_bSideBySideMode && m_pCoordinator && m_pCoordinator->GetLeftPaneView())
 		pf = static_cast<CDirFrame*>(
 			static_cast<CView*>(m_pCoordinator->GetLeftPaneView())->GetParentFrame());
 	if (pf == nullptr)

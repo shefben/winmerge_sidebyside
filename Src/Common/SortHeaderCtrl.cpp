@@ -21,7 +21,7 @@ BEGIN_MESSAGE_MAP(CSortHeaderCtrl, CHeaderCtrl)
 	//}}AFX_MSG_MAP
 END_MESSAGE_MAP()
 
-CSortHeaderCtrl::CSortHeaderCtrl() : m_bSortAsc(true), m_nSortCol(-1), m_bMouseTracking(false), m_nTrackingPane(-1)
+CSortHeaderCtrl::CSortHeaderCtrl() : m_bSortAsc(true), m_nSortCol(-1), m_bMouseTracking(false), m_nTrackingPane(-1), m_nExtraTopMargin(0)
 {
 }
 
@@ -171,4 +171,35 @@ void CSortHeaderCtrl::OnMouseLeave()
 		InvalidateRect(&rcPart, false);
 	}
 	m_nTrackingPane = -1;
+}
+
+void CSortHeaderCtrl::SetExtraTopMargin(int nMargin)
+{
+	m_nExtraTopMargin = nMargin;
+	// Force the parent list view to relayout the header
+	CWnd* pParent = GetParent();
+	if (pParent && pParent->GetSafeHwnd())
+	{
+		CRect rc;
+		pParent->GetClientRect(&rc);
+		pParent->SendMessage(WM_SIZE, SIZE_RESTORED,
+			MAKELPARAM(rc.Width(), rc.Height()));
+	}
+}
+
+/**
+ * @brief Intercept HDM_LAYOUT to push the header down, making room for
+ * embedded controls (e.g. a path combo box) above the column headers.
+ */
+LRESULT CSortHeaderCtrl::WindowProc(UINT message, WPARAM wParam, LPARAM lParam)
+{
+	if (message == HDM_LAYOUT && m_nExtraTopMargin > 0)
+	{
+		LRESULT result = CHeaderCtrl::WindowProc(message, wParam, lParam);
+		LPHDLAYOUT pHDL = reinterpret_cast<LPHDLAYOUT>(lParam);
+		pHDL->prc->top += m_nExtraTopMargin;   // Shrink item area (push items down)
+		pHDL->pwpos->y += m_nExtraTopMargin;    // Push header control down
+		return result;
+	}
+	return CHeaderCtrl::WindowProc(message, wParam, lParam);
 }

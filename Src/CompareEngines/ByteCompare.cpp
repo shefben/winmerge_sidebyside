@@ -23,7 +23,7 @@ namespace CompareEngines
 static const int KILO = 1024; // Kilo(byte)
 
 /** @brief Quick contents compare's file buffer size. */
-static const int WMCMPBUFF = 32 * KILO;
+static const int WMCMPBUFF = 256 * KILO;
 
 /**
  * @brief Default constructor.
@@ -79,7 +79,9 @@ int ByteCompare::CompareFiles(DiffFileData* diffData)
 	// Right now, we assume files are in 8-bit encoding
 	// because transform code converted any UCS-2 files to UTF-8
 	// We could compare directly in UCS-2LE here, as an optimization, in that case
-	char buff[2][WMCMPBUFF]; // buffered access to files
+	std::unique_ptr<char[]> buff0(new char[WMCMPBUFF]);
+	std::unique_ptr<char[]> buff1(new char[WMCMPBUFF]);
+	char* buff[2] = { buff0.get(), buff1.get() }; // buffered access to files
 	std::string lasteol[2];
 	int i;
 	unsigned diffcode = 0;

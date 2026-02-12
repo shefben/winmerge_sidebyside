@@ -20,6 +20,7 @@ public:
 protected:
 	int 	m_nSortCol;
 	bool	m_bSortAsc;
+	int		m_nExtraTopMargin; /**< Extra top margin for embedded controls above header */
 
 // Operations
 public:
@@ -30,6 +31,8 @@ public:
 	//}}AFX_VIRTUAL
 
 	virtual int 	SetSortImage(int nCol, bool bAsc);
+	void SetExtraTopMargin(int nMargin);
+	int GetExtraTopMargin() const { return m_nExtraTopMargin; }
 
 // Implementation
 public:
@@ -43,6 +46,7 @@ protected:
 	afx_msg void OnMouseMove(UINT nFlags, CPoint point);
 	afx_msg void OnMouseLeave();
 	//}}AFX_MSG
+	virtual LRESULT WindowProc(UINT message, WPARAM wParam, LPARAM lParam) override;
 
 	DECLARE_MESSAGE_MAP()
 

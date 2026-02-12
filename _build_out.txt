@@ -1,0 +1,1317 @@
+MSBuild version 17.14.40+3e7442088 for .NET Framework
+
+  64 bit Processing .\MergeAppLib.idl
+  MergeAppLib.idl
+  64 bit Processing C:\Program Files (x86)\Windows Kits\10\Include\10.0.26100.0\um\oaidl.idl
+  oaidl.idl
+  64 bit Processing C:\Program Files (x86)\Windows Kits\10\Include\10.0.26100.0\um\objidl.idl
+  objidl.idl
+  64 bit Processing C:\Program Files (x86)\Windows Kits\10\Include\10.0.26100.0\um\unknwn.idl
+  unknwn.idl
+  64 bit Processing C:\Program Files (x86)\Windows Kits\10\Include\10.0.26100.0\shared\wtypes.idl
+  wtypes.idl
+  64 bit Processing C:\Program Files (x86)\Windows Kits\10\Include\10.0.26100.0\shared\wtypesbase.idl
+  wtypesbase.idl
+  64 bit Processing C:\Program Files (x86)\Windows Kits\10\Include\10.0.26100.0\shared\basetsd.h
+  basetsd.h
+  64 bit Processing C:\Program Files (x86)\Windows Kits\10\Include\10.0.26100.0\shared\guiddef.h
+  guiddef.h
+  64 bit Processing C:\Program Files (x86)\Windows Kits\10\Include\10.0.26100.0\um\ocidl.idl
+  ocidl.idl
+  64 bit Processing C:\Program Files (x86)\Windows Kits\10\Include\10.0.26100.0\um\oleidl.idl
+  oleidl.idl
+  64 bit Processing C:\Program Files (x86)\Windows Kits\10\Include\10.0.26100.0\um\servprov.idl
+  servprov.idl
+  64 bit Processing C:\Program Files (x86)\Windows Kits\10\Include\10.0.26100.0\um\urlmon.idl
+  urlmon.idl
+  64 bit Processing C:\Program Files (x86)\Windows Kits\10\Include\10.0.26100.0\um\msxml.idl
+  msxml.idl
+  64 bit Processing C:\Program Files (x86)\Windows Kits\10\Include\10.0.26100.0\um\oaidl.acf
+  oaidl.acf
+  64 bit Processing C:\Program Files (x86)\Windows Kits\10\Include\10.0.26100.0\um\ocidl.acf
+  ocidl.acf
+  pch.cpp
+  StdAfx.cpp
+  ccrystaleditview.cpp
+  ccrystaltextbuffer.cpp
+  ccrystaltextmarkers.cpp
+  ccrystaltextview.cpp
+  ccrystaltextview2.cpp
+  crystaleditviewex.cpp
+  crystalparser.cpp
+  crystaltextblock.cpp
+  ceditreplacedlg.cpp
+  cfindtextdlg.cpp
+  chcondlg.cpp
+  ctextmarkerdlg.cpp
+  gotodlg.cpp
+  memcombo.cpp
+  FindTextHelper.cpp
+  ccrystalrenderergdi.cpp
+  cregexp.cpp
+  cregexp_poco.cpp
+  cs2cs.cpp
+  hqbitmap.cpp
+  icu.cpp
+  StackWalker.cpp
+  CrashLogger.cpp
+  7zCommon.cpp
+  AboutDlg.cpp
+  BasicFlatStatusBar.cpp
+  ClipboardHistory.cpp
+  AccentColor.cpp
+  RoundedRectWithShadow.cpp
+  SysColorHook.cpp
+  ValidatingEdit.cpp
+  BCMenu.cpp
+  Bitmap.cpp
+  DirFilterBar.cpp
+  PropertySystemMenu.cpp
+  DirAdditionalPropertiesDlg.cpp
+  DirSelectFilesDlg.cpp
+  EditPluginDlg.cpp
+  FileFilterHelperMenu.cpp
+  FilterConditionDlg.cpp
+  FiltersPropertySheet.cpp
+  FrameWndHelper.cpp
+  I18nGUI.cpp
+  MenuBar.cpp
+  MergeDocDiffCopy.cpp
+  MouseHook.cpp
+  MyColorDialog.cpp
+  MyFontDialog.cpp
+  MyReBar.cpp
+  OutputBar.cpp
+  OutputDoc.cpp
+  OutputView.cpp
+  PropCompareWebPage.cpp
+  PropEditorCompareMerge.cpp
+  PropMessageBoxes.cpp
+  PropSysColors.cpp
+  MergeFrameCommon.cpp
+  MergeEditFrm.cpp
+  CMoveConstraint.cpp
+  ColorButton.cpp
+  CompareStatisticsDlg.cpp
+  ConfirmFolderCopyDlg.cpp
+  DropHandler.cpp
+  ImgMergeFrm.cpp
+  MergeEditSplitterView.cpp
+  MergeStatusBar.cpp
+  OpenTableDlg.cpp
+  DiffTextBuffer.cpp
+  DiffViewBar.cpp
+  DirCmpReport.cpp
+  DirCmpReportDlg.cpp
+  DirColsDlg.cpp
+  DirCompProgressBar.cpp
+  DirDoc.cpp
+  DirFrame.cpp
+  DirPaneView.cpp
+  DirSideBySideCoordinator.cpp
+  DirSideBySideHeaderBar.cpp
+  DirSideBySideFilterBar.cpp
+  DirSxSToolBar.cpp
+  DirSxSSessionDlg.cpp
+  DirGutterView.cpp
+  DirView.cpp
+  dllpstub.cpp
+  EditorFilepathBar.cpp
+  EncodingErrorBar.cpp
+  FileActionScript.cpp
+  FileFiltersDlg.cpp
+  FilepathEdit.cpp
+  GhostTextBuffer.cpp
+  GhostTextView.cpp
+  HexMergeDoc.cpp
+  HexMergeFrm.cpp
+  HexMergeView.cpp
+  LanguageSelect.cpp
+  LineFiltersDlg.cpp
+  SubstitutionFiltersDlg.cpp
+  SubeditList.cpp
+  LoadSaveCodepageDlg.cpp
+  LocationBar.cpp
+  LocationView.cpp
+  MainFrm.cpp
+  MDITabBar.cpp
+  Merge.cpp
+  MergeApp.cpp
+  MergeDoc.cpp
+  MergeDocDiffSync.cpp
+  MergeDocEncoding.cpp
+  MergeDocLineDiffs.cpp
+  MergeEditView.cpp
+  MessageBoxDialog.cpp
+  OpenDoc.cpp
+  OpenFrm.cpp
+  OpenView.cpp
+  OptionsPanel.cpp
+  PatchDlg.cpp
+  PatchTool.cpp
+  PluginsListDlg.cpp
+  PreferencesDlg.cpp
+  PropArchive.cpp
+  PropBackups.cpp
+  PropCodepage.cpp
+  PropColorSchemes.cpp
+  PropCompareTable.cpp
+  PropEditorSyntax.cpp
+  PropMergeColors.cpp
+  PropCompare.cpp
+  PropCompareBinary.cpp
+  PropCompareFolder.cpp
+  PropCompareImage.cpp
+  PropDirColors.cpp
+  PropEditor.cpp
+  PropertyPageHost.cpp
+  PropGeneral.cpp
+  PropMarkerColors.cpp
+  PropProject.cpp
+  PropRegistry.cpp
+  PropShell.cpp
+  PropSyntaxColors.cpp
+  PropTextColors.cpp
+  SaveClosingDlg.cpp
+  scbarcf.cpp
+  scbarg.cpp
+  SelectPluginDlg.cpp
+  SharedFilterDlg.cpp
+  sizecbar.cpp
+  SortHeaderCtrl.cpp
+  SplitterWndEx.cpp
+  SuperComboBox.cpp
+  Test.cpp
+  TestFilterDlg.cpp
+  TestMain.cpp
+  TitleBarHelper.cpp
+  TrDialogs.cpp
+  WebPageDiffFrm.cpp
+  WildcardDropList.cpp
+  WindowsManager.cpp
+  WindowsManagerDialog.cpp
+  WinRtLoader.cpp
+  WMGotoDlg.cpp
+  LineInfo.cpp
+  SyntaxColors.cpp
+  UndoRecord.cpp
+  filesup.cpp
+  wcwidth.cpp
+  ViewableWhitespace.cpp
+  Diff.cpp
+  mystat.cpp
+  BinaryCompare.cpp
+  ByteComparator.cpp
+  ByteCompare.cpp
+  ExistenceCompare.cpp
+  ImageCompare.cpp
+  TimeSizeCompare.cpp
+  Wrap_DiffUtils.cpp
+  abap.cpp
+  ada.cpp
+  asp.cpp
+  autoit.cpp
+  basic.cpp
+  batch.cpp
+  cplusplus.cpp
+  crystallineparser.cpp
+  csharp.cpp
+  css.cpp
+  dcl.cpp
+  dlang.cpp
+  fortran.cpp
+  fsharp.cpp
+  go.cpp
+  html.cpp
+  ini.cpp
+  innosetup.cpp
+  is.cpp
+  isx.cpp
+  java.cpp
+  javascript.cpp
+  lisp.cpp
+  lua.cpp
+  matlab.cpp
+  nsis.cpp
+  pascal.cpp
+  perl.cpp
+  php.cpp
+  plain.cpp
+  po.cpp
+  powershell.cpp
+  python.cpp
+  rexx.cpp
+  rsrc.cpp
+  ruby.cpp
+  rust.cpp
+  sgml.cpp
+  sh.cpp
+  siod.cpp
+  smarty.cpp
+  sql.cpp
+  tcl.cpp
+  tex.cpp
+  verilog.cpp
+  vhdl.cpp
+  xml.cpp
+  fpattern.cpp
+  string_util.cpp
+  FileContentRef.cpp
+  FilterExpression.cpp
+  FilterExpressionNodes.cpp
+  FolderStats.cpp
+  FunctionNodeProperty.cpp
+  FilterLexer.cpp
+  FilterParser.cpp
+  ColorSchemes.cpp
+  cio.cpp
+  IniOptionsMgr.cpp
+  Shell.cpp
+  RenameMoveDetection.cpp
+  DirWatcher.cpp
+  FilterErrorMessages.cpp
+  InternalPlugins.cpp
+  HashCalc.cpp
+  Logger.cpp
+  PropertySystem.cpp
+  SubstitutionFiltersList.cpp
+  ClipBoard.cpp
+  codepage_detect.cpp
+  ExConverter.cpp
+  CompareOptions.cpp
+  CompareStats.cpp
+  ConfigLog.cpp
+  ConflictFileParser.cpp
+  coretools.cpp
+  Merge7zFormatMergePluginImpl.cpp
+  Merge7zFormatShellImpl.cpp
+  OptionsCustomColors.cpp
+  DiffContext.cpp
+  DiffFileData.cpp
+  DiffFileInfo.cpp
+  DiffItem.cpp
+  DiffItemList.cpp
+  DiffList.cpp
+  DiffThread.cpp
+  DiffWrapper.cpp
+  DirActions.cpp
+  DirItem.cpp
+  DirScan.cpp
+  DirTravel.cpp
+  DirViewColItems.cpp
+  Environment.cpp
+  FileFilter.cpp
+  FileFilterHelper.cpp
+  FileFilterMgr.cpp
+  FileFlags.cpp
+  FileOrFolderSelect.cpp
+  FileTextEncoding.cpp
+  FileTransform.cpp
+  FileVersion.cpp
+  FilterList.cpp
+  FolderCmp.cpp
+  JumpList.cpp
+  LineFiltersList.cpp
+  locality.cpp
+  markdown.cpp
+  MergeCmdLineInfo.cpp
+  MovedBlocks.cpp
+  MovedLines.cpp
+  multiformatText.cpp
+  OptionsDiffColors.cpp
+  OptionsDiffOptions.cpp
+  OptionsDirColors.cpp
+  OptionsEditorSyntax.cpp
+  OptionsFont.cpp
+  OptionsInit.cpp
+  OptionsMgr.cpp
+  OptionsProject.cpp
+  OptionsSyntaxColors.cpp
+  PatchHTML.cpp
+  PathContext.cpp
+  paths.cpp
+  PidlContainer.cpp
+  PluginManager.cpp
+  Plugins.cpp
+  ProjectFile.cpp
+  RegKey.cpp
+  RegOptionsMgr.cpp
+  ShellContextMenu.cpp
+  ShellFileOperations.cpp
+  stringdiffs.cpp
+  SubstitutionList.cpp
+C:\Program Files\Microsoft Visual Studio\2022\Community\VC\Tools\MSVC\14.44.35207\include\xutility(4813,18): warning C4244: '=': conversion from 'wchar_t' to 'char', possible loss of data [F:\development\steam\emulator_bot\winmerge_sidebyside\Src\Merge.vcxproj]
+  (compiling source file '/paths.cpp')
+      C:\Program Files\Microsoft Visual Studio\2022\Community\VC\Tools\MSVC\14.44.35207\include\xutility(4813,18):
+      the template instantiation context (the oldest one first) is
+          F:\development\steam\emulator_bot\winmerge_sidebyside\Src\paths.cpp(770,35):
+          see reference to function template instantiation 'std::basic_string<char,std::char_traits<char>,std::allocator<char>>::basic_string<std::_String_iterator<std::_String_val<std::_Simple_types<_Elem>>>,0>(_Iter,_Iter,const _Alloc &)' being compiled
+          with
+          [
+              _Elem=wchar_t,
+              _Iter=std::_String_iterator<std::_String_val<std::_Simple_types<wchar_t>>>,
+              _Alloc=std::allocator<char>
+          ]
+              F:\development\steam\emulator_bot\winmerge_sidebyside\Src\paths.cpp(770,2):
+              see the first reference to 'std::basic_string<char,std::char_traits<char>,std::allocator<char>>::basic_string' in 'paths::FromURL'
+          C:\Program Files\Microsoft Visual Studio\2022\Community\VC\Tools\MSVC\14.44.35207\include\xstring(812,17):
+          see reference to function template instantiation 'void std::basic_string<char,std::char_traits<char>,std::allocator<char>>::_Construct_from_iter<wchar_t*,wchar_t*,_Size_type>(_Iter,const _Sent,_Size)' being compiled
+          with
+          [
+              _Size_type=unsigned __int64,
+              _Iter=wchar_t *,
+              _Sent=wchar_t *,
+              _Size=unsigned __int64
+          ]
+          C:\Program Files\Microsoft Visual Studio\2022\Community\VC\Tools\MSVC\14.44.35207\include\xstring(968,18):
+          see reference to function template instantiation '_OutIt *std::_Copy_n_unchecked4<wchar_t*,_Size,char*>(_InIt,_SizeTy,_OutIt)' being compiled
+          with
+          [
+              _OutIt=char *,
+              _Size=unsigned __int64,
+              _InIt=wchar_t *,
+              _SizeTy=unsigned __int64
+          ]
+  
+  TempFile.cpp
+  unicoder.cpp
+  UnicodeString.cpp
+  UniFile.cpp
+  varprop.cpp
+  VersionInfo.cpp
+  MergeAppCOMClass.cpp
+  xdiff_gnudiff_compat.cpp
+  ccrystalrendererdirectwrite.cpp
+  PocoFoundation.cpp
+  PocoXML.cpp
+F:\development\steam\emulator_bot\winmerge_sidebyside\Externals\poco\XML\src\XMLWriter.cpp(748,14): warning C4456: declaration of 'prefix' hides previous local declaration [F:\development\steam\emulator_bot\winmerge_sidebyside\Src\Merge.vcxproj]
+  (compiling source file '../Externals/poco/XML/src/PocoXML.cpp')
+      F:\development\steam\emulator_bot\winmerge_sidebyside\Externals\poco\XML\src\XMLWriter.cpp(716,12):
+      see declaration of 'prefix'
+  
+F:\development\steam\emulator_bot\winmerge_sidebyside\Externals\poco\XML\src\xmlparse.cpp(3694,20): warning C4127: conditional expression is constant [F:\development\steam\emulator_bot\winmerge_sidebyside\Src\Merge.vcxproj]
+  (compiling source file '../Externals/poco/XML/src/PocoXML.cpp')
+      F:\development\steam\emulator_bot\winmerge_sidebyside\Externals\poco\XML\src\xmlparse.cpp(3694,20):
+      consider using 'if constexpr' statement instead
+  
+F:\development\steam\emulator_bot\winmerge_sidebyside\Externals\poco\XML\src\xmlparse.cpp(4643,20): warning C4127: conditional expression is constant [F:\development\steam\emulator_bot\winmerge_sidebyside\Src\Merge.vcxproj]
+  (compiling source file '../Externals/poco/XML/src/PocoXML.cpp')
+      F:\development\steam\emulator_bot\winmerge_sidebyside\Externals\poco\XML\src\xmlparse.cpp(4643,20):
+      consider using 'if constexpr' statement instead
+  
+F:\development\steam\emulator_bot\winmerge_sidebyside\Externals\poco\XML\src\xmlparse.cpp(7835,9): warning C4551: function call missing argument list [F:\development\steam\emulator_bot\winmerge_sidebyside\Src\Merge.vcxproj]
+  (compiling source file '../Externals/poco/XML/src/PocoXML.cpp')
+  
+F:\development\steam\emulator_bot\winmerge_sidebyside\Externals\poco\Foundation\src\StreamConverter.cpp(114,8): warning C4456: declaration of 'n' hides previous local declaration [F:\development\steam\emulator_bot\winmerge_sidebyside\Src\Merge.vcxproj]
+  (compiling source file '../Externals/poco/Foundation/src/PocoFoundation.cpp')
+      F:\development\steam\emulator_bot\winmerge_sidebyside\Externals\poco\Foundation\src\StreamConverter.cpp(105,7):
+      see declaration of 'n'
+  
+F:\development\steam\emulator_bot\winmerge_sidebyside\Externals\poco\Foundation\src\Thread_WIN32.cpp(283,16): warning C4245: 'argument': conversion from 'int' to 'DWORD', signed/unsigned mismatch [F:\development\steam\emulator_bot\winmerge_sidebyside\Src\Merge.vcxproj]
+  (compiling source file '../Externals/poco/Foundation/src/PocoFoundation.cpp')
+  
+F:\development\steam\emulator_bot\winmerge_sidebyside\Externals\poco\Foundation\include\Poco\ScopedLock.h(36,25): warning C4459: declaration of 'mutex' hides global declaration [F:\development\steam\emulator_bot\winmerge_sidebyside\Src\Merge.vcxproj]
+  (compiling source file '../Externals/poco/Foundation/src/PocoFoundation.cpp')
+      F:\development\steam\emulator_bot\winmerge_sidebyside\Externals\poco\Foundation\src\Base64Decoder.cpp(32,19):
+      see declaration of 'Poco::`anonymous-namespace'::mutex'
+      F:\development\steam\emulator_bot\winmerge_sidebyside\Externals\poco\Foundation\include\Poco\ScopedLock.h(36,25):
+      the template instantiation context (the oldest one first) is
+          F:\development\steam\emulator_bot\winmerge_sidebyside\Externals\poco\Foundation\src\AsyncChannel.cpp(76,24):
+          see reference to class template instantiation 'Poco::ScopedLock<Poco::FastMutex>' being compiled
+          F:\development\steam\emulator_bot\winmerge_sidebyside\Externals\poco\Foundation\include\Poco\ScopedLock.h(36,2):
+          while compiling class template member function 'Poco::ScopedLock<Poco::FastMutex>::ScopedLock(M &)'
+          with
+          [
+              M=Poco::FastMutex
+          ]
+              F:\development\steam\emulator_bot\winmerge_sidebyside\Externals\poco\Foundation\src\AsyncChannel.cpp(76,28):
+              see the first reference to 'Poco::ScopedLock<Poco::FastMutex>::ScopedLock' in 'Poco::AsyncChannel::setChannel'
+  
+F:\development\steam\emulator_bot\winmerge_sidebyside\Externals\poco\Foundation\include\Poco\ScopedLock.h(78,35): warning C4459: declaration of 'mutex' hides global declaration [F:\development\steam\emulator_bot\winmerge_sidebyside\Src\Merge.vcxproj]
+  (compiling source file '../Externals/poco/Foundation/src/PocoFoundation.cpp')
+      F:\development\steam\emulator_bot\winmerge_sidebyside\Externals\poco\Foundation\src\Base64Decoder.cpp(32,19):
+      see declaration of 'Poco::`anonymous-namespace'::mutex'
+      F:\development\steam\emulator_bot\winmerge_sidebyside\Externals\poco\Foundation\include\Poco\ScopedLock.h(78,35):
+      the template instantiation context (the oldest one first) is
+          F:\development\steam\emulator_bot\winmerge_sidebyside\Externals\poco\Foundation\src\NotificationCenter.cpp(130,30):
+          see reference to class template instantiation 'Poco::ScopedLockWithUnlock<Poco::Mutex>' being compiled
+          F:\development\steam\emulator_bot\winmerge_sidebyside\Externals\poco\Foundation\include\Poco\ScopedLock.h(78,2):
+          while compiling class template member function 'Poco::ScopedLockWithUnlock<Poco::Mutex>::ScopedLockWithUnlock(M &)'
+          with
+          [
+              M=Poco::Mutex
+          ]
+              F:\development\steam\emulator_bot\winmerge_sidebyside\Externals\poco\Foundation\src\NotificationCenter.cpp(130,34):
+              see the first reference to 'Poco::ScopedLockWithUnlock<Poco::Mutex>::ScopedLockWithUnlock' in 'Poco::NotificationCenter::backlog'
+  
+  xdiffi.c
+  xemit.c
+  xhistogram.c
+  xmerge.c
+  xnone.c
+  xpatience.c
+  xprepare.c
+  xutils.c
+F:\development\steam\emulator_bot\winmerge_sidebyside\Externals\xdiff\xmerge.c(202,28): warning C4267: 'initializing': conversion from 'size_t' to 'int', possible loss of data [F:\development\steam\emulator_bot\winmerge_sidebyside\Src\Merge.vcxproj]
+F:\development\steam\emulator_bot\winmerge_sidebyside\Externals\xdiff\xmerge.c(203,28): warning C4267: 'initializing': conversion from 'size_t' to 'int', possible loss of data [F:\development\steam\emulator_bot\winmerge_sidebyside\Src\Merge.vcxproj]
+F:\development\steam\emulator_bot\winmerge_sidebyside\Externals\xdiff\xmerge.c(204,28): warning C4267: 'initializing': conversion from 'size_t' to 'int', possible loss of data [F:\development\steam\emulator_bot\winmerge_sidebyside\Src\Merge.vcxproj]
+F:\development\steam\emulator_bot\winmerge_sidebyside\Externals\xdiff\xmerge.c(352,48): warning C4244: '=': conversion from '__int64' to 'long', possible loss of data [F:\development\steam\emulator_bot\winmerge_sidebyside\Src\Merge.vcxproj]
+F:\development\steam\emulator_bot\winmerge_sidebyside\Externals\xdiff\xmerge.c(355,48): warning C4244: '=': conversion from '__int64' to 'long', possible loss of data [F:\development\steam\emulator_bot\winmerge_sidebyside\Src\Merge.vcxproj]
+F:\development\steam\emulator_bot\winmerge_sidebyside\Externals\xdiff\xhistogram.c(116,32): warning C4018: '<=': signed/unsigned mismatch [F:\development\steam\emulator_bot\winmerge_sidebyside\Src\Merge.vcxproj]
+F:\development\steam\emulator_bot\winmerge_sidebyside\Externals\xdiff\xhistogram.c(191,17): warning C4018: '<': signed/unsigned mismatch [F:\development\steam\emulator_bot\winmerge_sidebyside\Src\Merge.vcxproj]
+F:\development\steam\emulator_bot\winmerge_sidebyside\Externals\xdiff\xhistogram.c(191,31): warning C4018: '<': signed/unsigned mismatch [F:\development\steam\emulator_bot\winmerge_sidebyside\Src\Merge.vcxproj]
+F:\development\steam\emulator_bot\winmerge_sidebyside\Externals\xdiff\xhistogram.c(198,14): warning C4018: '<': signed/unsigned mismatch [F:\development\steam\emulator_bot\winmerge_sidebyside\Src\Merge.vcxproj]
+F:\development\steam\emulator_bot\winmerge_sidebyside\Externals\xdiff\xhistogram.c(198,34): warning C4018: '<': signed/unsigned mismatch [F:\development\steam\emulator_bot\winmerge_sidebyside\Src\Merge.vcxproj]
+F:\development\steam\emulator_bot\winmerge_sidebyside\Externals\xdiff\xemit.c(34,21): warning C4267: 'initializing': conversion from 'size_t' to 'long', possible loss of data [F:\development\steam\emulator_bot\winmerge_sidebyside\Src\Merge.vcxproj]
+F:\development\steam\emulator_bot\winmerge_sidebyside\Externals\xdiff\xemit.c(84,51): warning C4018: '>': signed/unsigned mismatch [F:\development\steam\emulator_bot\winmerge_sidebyside\Src\Merge.vcxproj]
+F:\development\steam\emulator_bot\winmerge_sidebyside\Externals\xdiff\xutils.c(74,16): warning C4267: '=': conversion from 'size_t' to 'long', possible loss of data [F:\development\steam\emulator_bot\winmerge_sidebyside\Src\Merge.vcxproj]
+F:\development\steam\emulator_bot\winmerge_sidebyside\Externals\xdiff\xutils.c(200,9): warning C4244: '=': conversion from 'int' to 'char', possible loss of data [F:\development\steam\emulator_bot\winmerge_sidebyside\Src\Merge.vcxproj]
+F:\development\steam\emulator_bot\winmerge_sidebyside\Externals\xdiff\xutils.c(202,9): warning C4244: '=': conversion from 'int' to 'char', possible loss of data [F:\development\steam\emulator_bot\winmerge_sidebyside\Src\Merge.vcxproj]
+F:\development\steam\emulator_bot\winmerge_sidebyside\Externals\xdiff\xutils.c(461,13): warning C4244: 'return': conversion from '__int64' to 'int', possible loss of data [F:\development\steam\emulator_bot\winmerge_sidebyside\Src\Merge.vcxproj]
+F:\development\steam\emulator_bot\winmerge_sidebyside\Externals\xdiff\xutils.c(542,49): warning C4244: '=': conversion from '__int64' to 'long', possible loss of data [F:\development\steam\emulator_bot\winmerge_sidebyside\Src\Merge.vcxproj]
+F:\development\steam\emulator_bot\winmerge_sidebyside\Externals\xdiff\xutils.c(545,49): warning C4244: '=': conversion from '__int64' to 'long', possible loss of data [F:\development\steam\emulator_bot\winmerge_sidebyside\Src\Merge.vcxproj]
+  GnuVersion.c
+  cmpbuf.c
+  analyze.c
+  context.c
+  ed.c
+  ifdef.c
+  io.c
+  normal.c
+  side.c
+  util.c
+  pcre2.c
+  expat.c
+  charsets.c
+  lwdisp.c
+F:\development\steam\emulator_bot\winmerge_sidebyside\Externals\poco\Foundation\src\pcre2_auto_possess.c(375,11): warning C4244: '=': conversion from 'uint32_t' to 'PCRE2_UCHAR8', possible loss of data [F:\development\steam\emulator_bot\winmerge_sidebyside\Src\Merge.vcxproj]
+  (compiling source file '../Externals/poco/Foundation/src/pcre2.c')
+  
+F:\development\steam\emulator_bot\winmerge_sidebyside\Externals\poco\Foundation\src\pcre2_chkdint.c(81,28): warning C4127: conditional expression is constant [F:\development\steam\emulator_bot\winmerge_sidebyside\Src\Merge.vcxproj]
+  (compiling source file '../Externals/poco/Foundation/src/pcre2.c')
+  
+F:\development\steam\emulator_bot\winmerge_sidebyside\Externals\poco\Foundation\src\pcre2_compile.c(2207,15): warning C4244: '=': conversion from 'int' to 'PCRE2_UCHAR8', possible loss of data [F:\development\steam\emulator_bot\winmerge_sidebyside\Src\Merge.vcxproj]
+  (compiling source file '../Externals/poco/Foundation/src/pcre2.c')
+  
+F:\development\steam\emulator_bot\winmerge_sidebyside\Externals\poco\Foundation\src\pcre2_compile.c(2220,13): warning C4244: '=': conversion from 'int' to 'PCRE2_UCHAR8', possible loss of data [F:\development\steam\emulator_bot\winmerge_sidebyside\Src\Merge.vcxproj]
+  (compiling source file '../Externals/poco/Foundation/src/pcre2.c')
+  
+F:\development\steam\emulator_bot\winmerge_sidebyside\Externals\poco\Foundation\src\pcre2_compile.c(5936,19): warning C4244: '=': conversion from 'uint32_t' to 'PCRE2_UCHAR8', possible loss of data [F:\development\steam\emulator_bot\winmerge_sidebyside\Src\Merge.vcxproj]
+  (compiling source file '../Externals/poco/Foundation/src/pcre2.c')
+  
+F:\development\steam\emulator_bot\winmerge_sidebyside\Externals\poco\Foundation\src\pcre2_compile.c(5943,15): warning C4244: '=': conversion from 'uint32_t' to 'PCRE2_UCHAR8', possible loss of data [F:\development\steam\emulator_bot\winmerge_sidebyside\Src\Merge.vcxproj]
+  (compiling source file '../Externals/poco/Foundation/src/pcre2.c')
+  
+F:\development\steam\emulator_bot\winmerge_sidebyside\Externals\poco\Foundation\src\pcre2_compile.c(6248,34): warning C4244: '=': conversion from 'uint32_t' to 'PCRE2_UCHAR8', possible loss of data [F:\development\steam\emulator_bot\winmerge_sidebyside\Src\Merge.vcxproj]
+  (compiling source file '../Externals/poco/Foundation/src/pcre2.c')
+  
+F:\development\steam\emulator_bot\winmerge_sidebyside\Externals\poco\Foundation\src\pcre2_compile.c(6249,34): warning C4244: '=': conversion from 'uint32_t' to 'PCRE2_UCHAR8', possible loss of data [F:\development\steam\emulator_bot\winmerge_sidebyside\Src\Merge.vcxproj]
+  (compiling source file '../Externals/poco/Foundation/src/pcre2.c')
+  
+F:\development\steam\emulator_bot\winmerge_sidebyside\Externals\poco\Foundation\src\pcre2_compile.c(6520,22): warning C4244: '=': conversion from 'const uint32_t' to 'PCRE2_UCHAR8', possible loss of data [F:\development\steam\emulator_bot\winmerge_sidebyside\Src\Merge.vcxproj]
+  (compiling source file '../Externals/poco/Foundation/src/pcre2.c')
+  
+F:\development\steam\emulator_bot\winmerge_sidebyside\Externals\poco\Foundation\src\pcre2_compile.c(6546,22): warning C4244: '=': conversion from 'const uint32_t' to 'PCRE2_UCHAR8', possible loss of data [F:\development\steam\emulator_bot\winmerge_sidebyside\Src\Merge.vcxproj]
+  (compiling source file '../Externals/poco/Foundation/src/pcre2.c')
+  
+F:\development\steam\emulator_bot\winmerge_sidebyside\Externals\poco\Foundation\src\pcre2_compile.c(6559,23): warning C4244: '=': conversion from 'uint32_t' to 'PCRE2_UCHAR8', possible loss of data [F:\development\steam\emulator_bot\winmerge_sidebyside\Src\Merge.vcxproj]
+  (compiling source file '../Externals/poco/Foundation/src/pcre2.c')
+  
+F:\development\steam\emulator_bot\winmerge_sidebyside\Externals\poco\Foundation\src\pcre2_compile.c(6569,17): warning C4244: '=': conversion from 'uint32_t' to 'PCRE2_UCHAR8', possible loss of data [F:\development\steam\emulator_bot\winmerge_sidebyside\Src\Merge.vcxproj]
+  (compiling source file '../Externals/poco/Foundation/src/pcre2.c')
+  
+F:\development\steam\emulator_bot\winmerge_sidebyside\Externals\poco\Foundation\src\pcre2_compile.c(6623,13): warning C4244: '=': conversion from 'uint32_t' to 'PCRE2_UCHAR8', possible loss of data [F:\development\steam\emulator_bot\winmerge_sidebyside\Src\Merge.vcxproj]
+  (compiling source file '../Externals/poco/Foundation/src/pcre2.c')
+  
+F:\development\steam\emulator_bot\winmerge_sidebyside\Externals\poco\Foundation\src\pcre2_compile.c(6666,9): warning C4244: '=': conversion from 'uint32_t' to 'PCRE2_UCHAR8', possible loss of data [F:\development\steam\emulator_bot\winmerge_sidebyside\Src\Merge.vcxproj]
+  (compiling source file '../Externals/poco/Foundation/src/pcre2.c')
+  
+F:\development\steam\emulator_bot\winmerge_sidebyside\Externals\poco\Foundation\src\pcre2_compile.c(6689,7): warning C4244: '=': conversion from 'int' to 'PCRE2_UCHAR8', possible loss of data [F:\development\steam\emulator_bot\winmerge_sidebyside\Src\Merge.vcxproj]
+  (compiling source file '../Externals/poco/Foundation/src/pcre2.c')
+  
+F:\development\steam\emulator_bot\winmerge_sidebyside\Externals\poco\Foundation\src\pcre2_compile.c(6690,7): warning C4244: '=': conversion from 'int' to 'PCRE2_UCHAR8', possible loss of data [F:\development\steam\emulator_bot\winmerge_sidebyside\Src\Merge.vcxproj]
+  (compiling source file '../Externals/poco/Foundation/src/pcre2.c')
+  
+F:\development\steam\emulator_bot\winmerge_sidebyside\Externals\poco\Foundation\src\pcre2_compile.c(6721,5): warning C4244: '=': conversion from 'uint32_t' to 'PCRE2_UCHAR8', possible loss of data [F:\development\steam\emulator_bot\winmerge_sidebyside\Src\Merge.vcxproj]
+  (compiling source file '../Externals/poco/Foundation/src/pcre2.c')
+  
+F:\development\steam\emulator_bot\winmerge_sidebyside\Externals\poco\Foundation\src\pcre2_compile.c(6819,13): warning C4244: '=': conversion from 'int' to 'PCRE2_UCHAR8', possible loss of data [F:\development\steam\emulator_bot\winmerge_sidebyside\Src\Merge.vcxproj]
+  (compiling source file '../Externals/poco/Foundation/src/pcre2.c')
+  
+F:\development\steam\emulator_bot\winmerge_sidebyside\Externals\poco\Foundation\src\pcre2_compile.c(7093,7): warning C4244: '=': conversion from 'int' to 'PCRE2_UCHAR8', possible loss of data [F:\development\steam\emulator_bot\winmerge_sidebyside\Src\Merge.vcxproj]
+  (compiling source file '../Externals/poco/Foundation/src/pcre2.c')
+  
+F:\development\steam\emulator_bot\winmerge_sidebyside\Externals\poco\Foundation\src\pcre2_compile.c(7094,7): warning C4244: '=': conversion from 'int' to 'PCRE2_UCHAR8', possible loss of data [F:\development\steam\emulator_bot\winmerge_sidebyside\Src\Merge.vcxproj]
+  (compiling source file '../Externals/poco/Foundation/src/pcre2.c')
+  
+F:\development\steam\emulator_bot\winmerge_sidebyside\Externals\poco\Foundation\src\pcre2_compile.c(7106,33): warning C4244: '=': conversion from 'uint32_t' to 'PCRE2_UCHAR8', possible loss of data [F:\development\steam\emulator_bot\winmerge_sidebyside\Src\Merge.vcxproj]
+  (compiling source file '../Externals/poco/Foundation/src/pcre2.c')
+  
+F:\development\steam\emulator_bot\winmerge_sidebyside\Externals\poco\Foundation\src\pcre2_compile.c(7160,31): warning C4244: '=': conversion from 'uint32_t' to 'PCRE2_UCHAR8', possible loss of data [F:\development\steam\emulator_bot\winmerge_sidebyside\Src\Merge.vcxproj]
+  (compiling source file '../Externals/poco/Foundation/src/pcre2.c')
+  
+F:\development\steam\emulator_bot\winmerge_sidebyside\Externals\poco\Foundation\src\pcre2_compile.c(7330,29): warning C4244: '=': conversion from 'uint32_t' to 'PCRE2_UCHAR8', possible loss of data [F:\development\steam\emulator_bot\winmerge_sidebyside\Src\Merge.vcxproj]
+  (compiling source file '../Externals/poco/Foundation/src/pcre2.c')
+  
+F:\development\steam\emulator_bot\winmerge_sidebyside\Externals\poco\Foundation\src\pcre2_compile.c(7332,29): warning C4244: '=': conversion from 'uint32_t' to 'PCRE2_UCHAR8', possible loss of data [F:\development\steam\emulator_bot\winmerge_sidebyside\Src\Merge.vcxproj]
+  (compiling source file '../Externals/poco/Foundation/src/pcre2.c')
+  
+F:\development\steam\emulator_bot\winmerge_sidebyside\Externals\poco\Foundation\src\pcre2_compile.c(7334,30): warning C4244: '=': conversion from 'uint32_t' to 'PCRE2_UCHAR8', possible loss of data [F:\development\steam\emulator_bot\winmerge_sidebyside\Src\Merge.vcxproj]
+  (compiling source file '../Externals/poco/Foundation/src/pcre2.c')
+  
+F:\development\steam\emulator_bot\winmerge_sidebyside\Externals\poco\Foundation\src\pcre2_compile.c(7337,30): warning C4244: '=': conversion from 'uint32_t' to 'PCRE2_UCHAR8', possible loss of data [F:\development\steam\emulator_bot\winmerge_sidebyside\Src\Merge.vcxproj]
+  (compiling source file '../Externals/poco/Foundation/src/pcre2.c')
+  
+F:\development\steam\emulator_bot\winmerge_sidebyside\Externals\poco\Foundation\src\pcre2_compile.c(7338,9): warning C4244: '=': conversion from 'uint32_t' to 'PCRE2_UCHAR8', possible loss of data [F:\development\steam\emulator_bot\winmerge_sidebyside\Src\Merge.vcxproj]
+  (compiling source file '../Externals/poco/Foundation/src/pcre2.c')
+  
+F:\development\steam\emulator_bot\winmerge_sidebyside\Externals\poco\Foundation\src\pcre2_compile.c(7340,9): warning C4244: '=': conversion from 'uint32_t' to 'PCRE2_UCHAR8', possible loss of data [F:\development\steam\emulator_bot\winmerge_sidebyside\Src\Merge.vcxproj]
+  (compiling source file '../Externals/poco/Foundation/src/pcre2.c')
+  
+F:\development\steam\emulator_bot\winmerge_sidebyside\Externals\poco\Foundation\src\pcre2_compile.c(7507,38): warning C4244: '=': conversion from 'uint32_t' to 'PCRE2_UCHAR8', possible loss of data [F:\development\steam\emulator_bot\winmerge_sidebyside\Src\Merge.vcxproj]
+  (compiling source file '../Externals/poco/Foundation/src/pcre2.c')
+  
+F:\development\steam\emulator_bot\winmerge_sidebyside\Externals\poco\Foundation\src\pcre2_compile.c(7522,38): warning C4244: '=': conversion from 'uint32_t' to 'PCRE2_UCHAR8', possible loss of data [F:\development\steam\emulator_bot\winmerge_sidebyside\Src\Merge.vcxproj]
+  (compiling source file '../Externals/poco/Foundation/src/pcre2.c')
+  
+F:\development\steam\emulator_bot\winmerge_sidebyside\Externals\poco\Foundation\src\pcre2_compile.c(7616,34): warning C4244: '=': conversion from 'uint32_t' to 'PCRE2_UCHAR8', possible loss of data [F:\development\steam\emulator_bot\winmerge_sidebyside\Src\Merge.vcxproj]
+  (compiling source file '../Externals/poco/Foundation/src/pcre2.c')
+  
+F:\development\steam\emulator_bot\winmerge_sidebyside\Externals\poco\Foundation\src\pcre2_compile.c(7689,35): warning C4244: '=': conversion from 'uint32_t' to 'PCRE2_UCHAR8', possible loss of data [F:\development\steam\emulator_bot\winmerge_sidebyside\Src\Merge.vcxproj]
+  (compiling source file '../Externals/poco/Foundation/src/pcre2.c')
+  
+F:\development\steam\emulator_bot\winmerge_sidebyside\Externals\poco\Foundation\src\pcre2_compile.c(7745,40): warning C4244: '=': conversion from 'uint32_t' to 'PCRE2_UCHAR8', possible loss of data [F:\development\steam\emulator_bot\winmerge_sidebyside\Src\Merge.vcxproj]
+  (compiling source file '../Externals/poco/Foundation/src/pcre2.c')
+  
+F:\development\steam\emulator_bot\winmerge_sidebyside\Externals\poco\Foundation\src\pcre2_compile.c(7809,65): warning C4244: '=': conversion from 'uint32_t' to 'PCRE2_UCHAR8', possible loss of data [F:\development\steam\emulator_bot\winmerge_sidebyside\Src\Merge.vcxproj]
+  (compiling source file '../Externals/poco/Foundation/src/pcre2.c')
+  
+F:\development\steam\emulator_bot\winmerge_sidebyside\Externals\poco\Foundation\src\pcre2_compile.c(7810,58): warning C4244: '=': conversion from 'uint32_t' to 'PCRE2_UCHAR8', possible loss of data [F:\development\steam\emulator_bot\winmerge_sidebyside\Src\Merge.vcxproj]
+  (compiling source file '../Externals/poco/Foundation/src/pcre2.c')
+  
+F:\development\steam\emulator_bot\winmerge_sidebyside\Externals\poco\Foundation\src\pcre2_compile.c(7813,31): warning C4244: '=': conversion from 'uint32_t' to 'PCRE2_UCHAR8', possible loss of data [F:\development\steam\emulator_bot\winmerge_sidebyside\Src\Merge.vcxproj]
+  (compiling source file '../Externals/poco/Foundation/src/pcre2.c')
+  
+F:\development\steam\emulator_bot\winmerge_sidebyside\Externals\poco\Foundation\src\pcre2_compile.c(7814,13): warning C4244: '=': conversion from 'uint32_t' to 'PCRE2_UCHAR8', possible loss of data [F:\development\steam\emulator_bot\winmerge_sidebyside\Src\Merge.vcxproj]
+  (compiling source file '../Externals/poco/Foundation/src/pcre2.c')
+  
+F:\development\steam\emulator_bot\winmerge_sidebyside\Externals\poco\Foundation\src\pcre2_compile.c(7826,31): warning C4244: '=': conversion from 'uint32_t' to 'PCRE2_UCHAR8', possible loss of data [F:\development\steam\emulator_bot\winmerge_sidebyside\Src\Merge.vcxproj]
+  (compiling source file '../Externals/poco/Foundation/src/pcre2.c')
+  
+F:\development\steam\emulator_bot\winmerge_sidebyside\Externals\poco\Foundation\src\pcre2_compile.c(7831,31): warning C4244: '=': conversion from 'uint32_t' to 'PCRE2_UCHAR8', possible loss of data [F:\development\steam\emulator_bot\winmerge_sidebyside\Src\Merge.vcxproj]
+  (compiling source file '../Externals/poco/Foundation/src/pcre2.c')
+  
+F:\development\steam\emulator_bot\winmerge_sidebyside\Externals\poco\Foundation\src\pcre2_compile.c(7832,13): warning C4244: '=': conversion from 'uint32_t' to 'PCRE2_UCHAR8', possible loss of data [F:\development\steam\emulator_bot\winmerge_sidebyside\Src\Merge.vcxproj]
+  (compiling source file '../Externals/poco/Foundation/src/pcre2.c')
+  
+F:\development\steam\emulator_bot\winmerge_sidebyside\Externals\poco\Foundation\src\pcre2_compile.c(7841,30): warning C4244: '=': conversion from 'uint32_t' to 'PCRE2_UCHAR8', possible loss of data [F:\development\steam\emulator_bot\winmerge_sidebyside\Src\Merge.vcxproj]
+  (compiling source file '../Externals/poco/Foundation/src/pcre2.c')
+  
+F:\development\steam\emulator_bot\winmerge_sidebyside\Externals\poco\Foundation\src\pcre2_compile.c(7842,11): warning C4244: '=': conversion from 'uint32_t' to 'PCRE2_UCHAR8', possible loss of data [F:\development\steam\emulator_bot\winmerge_sidebyside\Src\Merge.vcxproj]
+  (compiling source file '../Externals/poco/Foundation/src/pcre2.c')
+  
+F:\development\steam\emulator_bot\winmerge_sidebyside\Externals\poco\Foundation\src\pcre2_compile.c(7861,27): warning C4244: '=': conversion from 'int' to 'PCRE2_UCHAR8', possible loss of data [F:\development\steam\emulator_bot\winmerge_sidebyside\Src\Merge.vcxproj]
+  (compiling source file '../Externals/poco/Foundation/src/pcre2.c')
+  
+F:\development\steam\emulator_bot\winmerge_sidebyside\Externals\poco\Foundation\src\pcre2_compile.c(7862,27): warning C4244: '=': conversion from 'int' to 'PCRE2_UCHAR8', possible loss of data [F:\development\steam\emulator_bot\winmerge_sidebyside\Src\Merge.vcxproj]
+  (compiling source file '../Externals/poco/Foundation/src/pcre2.c')
+  
+F:\development\steam\emulator_bot\winmerge_sidebyside\Externals\poco\Foundation\src\pcre2_compile.c(7869,33): warning C4244: '=': conversion from 'uint32_t' to 'PCRE2_UCHAR8', possible loss of data [F:\development\steam\emulator_bot\winmerge_sidebyside\Src\Merge.vcxproj]
+  (compiling source file '../Externals/poco/Foundation/src/pcre2.c')
+  
+F:\development\steam\emulator_bot\winmerge_sidebyside\Externals\poco\Foundation\src\pcre2_compile.c(7875,36): warning C4244: '=': conversion from 'uint32_t' to 'PCRE2_UCHAR8', possible loss of data [F:\development\steam\emulator_bot\winmerge_sidebyside\Src\Merge.vcxproj]
+  (compiling source file '../Externals/poco/Foundation/src/pcre2.c')
+  
+F:\development\steam\emulator_bot\winmerge_sidebyside\Externals\poco\Foundation\src\pcre2_compile.c(7879,35): warning C4244: '=': conversion from 'uint32_t' to 'PCRE2_UCHAR8', possible loss of data [F:\development\steam\emulator_bot\winmerge_sidebyside\Src\Merge.vcxproj]
+  (compiling source file '../Externals/poco/Foundation/src/pcre2.c')
+  
+F:\development\steam\emulator_bot\winmerge_sidebyside\Externals\poco\Foundation\src\pcre2_compile.c(7880,17): warning C4244: '=': conversion from 'uint32_t' to 'PCRE2_UCHAR8', possible loss of data [F:\development\steam\emulator_bot\winmerge_sidebyside\Src\Merge.vcxproj]
+  (compiling source file '../Externals/poco/Foundation/src/pcre2.c')
+  
+F:\development\steam\emulator_bot\winmerge_sidebyside\Externals\poco\Foundation\src\pcre2_compile.c(7898,23): warning C4244: '=': conversion from 'int' to 'PCRE2_UCHAR8', possible loss of data [F:\development\steam\emulator_bot\winmerge_sidebyside\Src\Merge.vcxproj]
+  (compiling source file '../Externals/poco/Foundation/src/pcre2.c')
+  
+F:\development\steam\emulator_bot\winmerge_sidebyside\Externals\poco\Foundation\src\pcre2_compile.c(7899,23): warning C4244: '=': conversion from 'int' to 'PCRE2_UCHAR8', possible loss of data [F:\development\steam\emulator_bot\winmerge_sidebyside\Src\Merge.vcxproj]
+  (compiling source file '../Externals/poco/Foundation/src/pcre2.c')
+  
+F:\development\steam\emulator_bot\winmerge_sidebyside\Externals\poco\Foundation\src\pcre2_compile.c(8047,5): warning C4244: '=': conversion from 'uint32_t' to 'PCRE2_UCHAR8', possible loss of data [F:\development\steam\emulator_bot\winmerge_sidebyside\Src\Merge.vcxproj]
+  (compiling source file '../Externals/poco/Foundation/src/pcre2.c')
+  
+F:\development\steam\emulator_bot\winmerge_sidebyside\Externals\poco\Foundation\src\pcre2_compile.c(8094,5): warning C4244: '=': conversion from 'uint32_t' to 'PCRE2_UCHAR8', possible loss of data [F:\development\steam\emulator_bot\winmerge_sidebyside\Src\Merge.vcxproj]
+  (compiling source file '../Externals/poco/Foundation/src/pcre2.c')
+  
+F:\development\steam\emulator_bot\winmerge_sidebyside\Externals\poco\Foundation\src\pcre2_compile.c(8150,19): warning C4244: '=': conversion from 'uint32_t' to 'PCRE2_UCHAR8', possible loss of data [F:\development\steam\emulator_bot\winmerge_sidebyside\Src\Merge.vcxproj]
+  (compiling source file '../Externals/poco/Foundation/src/pcre2.c')
+  
+F:\development\steam\emulator_bot\winmerge_sidebyside\Externals\poco\Foundation\src\pcre2_compile.c(8151,19): warning C4244: '=': conversion from 'uint32_t' to 'PCRE2_UCHAR8', possible loss of data [F:\development\steam\emulator_bot\winmerge_sidebyside\Src\Merge.vcxproj]
+  (compiling source file '../Externals/poco/Foundation/src/pcre2.c')
+  
+F:\development\steam\emulator_bot\winmerge_sidebyside\Externals\poco\Foundation\src\pcre2_compile.c(8203,15): warning C4244: '=': conversion from 'uint32_t' to 'PCRE2_UCHAR8', possible loss of data [F:\development\steam\emulator_bot\winmerge_sidebyside\Src\Merge.vcxproj]
+  (compiling source file '../Externals/poco/Foundation/src/pcre2.c')
+  
+F:\development\steam\emulator_bot\winmerge_sidebyside\Externals\poco\Foundation\src\pcre2_compile.c(8244,19): warning C4244: '=': conversion from 'uint32_t' to 'PCRE2_UCHAR8', possible loss of data [F:\development\steam\emulator_bot\winmerge_sidebyside\Src\Merge.vcxproj]
+  (compiling source file '../Externals/poco/Foundation/src/pcre2.c')
+  
+F:\development\steam\emulator_bot\winmerge_sidebyside\Externals\poco\Foundation\src\pcre2_compile.c(8267,21): warning C4244: '=': conversion from 'uint32_t' to 'PCRE2_UCHAR8', possible loss of data [F:\development\steam\emulator_bot\winmerge_sidebyside\Src\Merge.vcxproj]
+  (compiling source file '../Externals/poco/Foundation/src/pcre2.c')
+  
+F:\development\steam\emulator_bot\winmerge_sidebyside\Externals\poco\Foundation\src\pcre2_compile.c(8448,20): warning C4244: '=': conversion from 'int' to 'uint16_t', possible loss of data [F:\development\steam\emulator_bot\winmerge_sidebyside\Src\Merge.vcxproj]
+  (compiling source file '../Externals/poco/Foundation/src/pcre2.c')
+  
+F:\development\steam\emulator_bot\winmerge_sidebyside\Externals\poco\Foundation\src\pcre2_compile.c(8479,7): warning C4244: '=': conversion from 'uint32_t' to 'PCRE2_UCHAR8', possible loss of data [F:\development\steam\emulator_bot\winmerge_sidebyside\Src\Merge.vcxproj]
+  (compiling source file '../Externals/poco/Foundation/src/pcre2.c')
+  
+F:\development\steam\emulator_bot\winmerge_sidebyside\Externals\poco\Foundation\src\pcre2_compile.c(8485,7): warning C4244: '=': conversion from 'uint32_t' to 'PCRE2_UCHAR8', possible loss of data [F:\development\steam\emulator_bot\winmerge_sidebyside\Src\Merge.vcxproj]
+  (compiling source file '../Externals/poco/Foundation/src/pcre2.c')
+  
+F:\development\steam\emulator_bot\winmerge_sidebyside\Externals\poco\Foundation\src\pcre2_compile.c(8486,7): warning C4244: '=': conversion from 'uint32_t' to 'PCRE2_UCHAR8', possible loss of data [F:\development\steam\emulator_bot\winmerge_sidebyside\Src\Merge.vcxproj]
+  (compiling source file '../Externals/poco/Foundation/src/pcre2.c')
+  
+F:\development\steam\emulator_bot\winmerge_sidebyside\Externals\poco\Foundation\src\pcre2_compile.c(9208,1): warning C4244: '=': conversion from 'unsigned int' to 'PCRE2_UCHAR8', possible loss of data [F:\development\steam\emulator_bot\winmerge_sidebyside\Src\Merge.vcxproj]
+  (compiling source file '../Externals/poco/Foundation/src/pcre2.c')
+  
+F:\development\steam\emulator_bot\winmerge_sidebyside\Externals\poco\Foundation\src\pcre2_compile.c(10649,22): warning C4244: '=': conversion from 'int' to 'uint16_t', possible loss of data [F:\development\steam\emulator_bot\winmerge_sidebyside\Src\Merge.vcxproj]
+  (compiling source file '../Externals/poco/Foundation/src/pcre2.c')
+  
+F:\development\steam\emulator_bot\winmerge_sidebyside\Externals\poco\Foundation\src\pcre2_compile.c(10650,26): warning C4244: '=': conversion from 'int' to 'uint16_t', possible loss of data [F:\development\steam\emulator_bot\winmerge_sidebyside\Src\Merge.vcxproj]
+  (compiling source file '../Externals/poco/Foundation/src/pcre2.c')
+  
+F:\development\steam\emulator_bot\winmerge_sidebyside\Externals\poco\Foundation\src\pcre2_compile.c(10699,21): warning C4244: '=': conversion from 'uint32_t' to 'uint16_t', possible loss of data [F:\development\steam\emulator_bot\winmerge_sidebyside\Src\Merge.vcxproj]
+  (compiling source file '../Externals/poco/Foundation/src/pcre2.c')
+  
+F:\development\steam\emulator_bot\winmerge_sidebyside\Externals\poco\Foundation\src\pcre2_compile.c(10700,21): warning C4244: '=': conversion from 'uint32_t' to 'uint16_t', possible loss of data [F:\development\steam\emulator_bot\winmerge_sidebyside\Src\Merge.vcxproj]
+  (compiling source file '../Externals/poco/Foundation/src/pcre2.c')
+  
+F:\development\steam\emulator_bot\winmerge_sidebyside\Externals\poco\Foundation\src\pcre2_compile.c(10701,24): warning C4244: '=': conversion from 'int' to 'uint16_t', possible loss of data [F:\development\steam\emulator_bot\winmerge_sidebyside\Src\Merge.vcxproj]
+  (compiling source file '../Externals/poco/Foundation/src/pcre2.c')
+  
+F:\development\steam\emulator_bot\winmerge_sidebyside\Externals\poco\Foundation\src\pcre2_compile.c(10953,53): warning C4244: '=': conversion from 'int' to 'uint16_t', possible loss of data [F:\development\steam\emulator_bot\winmerge_sidebyside\Src\Merge.vcxproj]
+  (compiling source file '../Externals/poco/Foundation/src/pcre2.c')
+  
+F:\development\steam\emulator_bot\winmerge_sidebyside\Externals\poco\Foundation\src\pcre2_context.c(338,30): warning C4244: '=': conversion from 'uint32_t' to 'uint16_t', possible loss of data [F:\development\steam\emulator_bot\winmerge_sidebyside\Src\Merge.vcxproj]
+  (compiling source file '../Externals/poco/Foundation/src/pcre2.c')
+  
+F:\development\steam\emulator_bot\winmerge_sidebyside\Externals\poco\Foundation\src\pcre2_context.c(371,34): warning C4244: '=': conversion from 'uint32_t' to 'uint16_t', possible loss of data [F:\development\steam\emulator_bot\winmerge_sidebyside\Src\Merge.vcxproj]
+  (compiling source file '../Externals/poco/Foundation/src/pcre2.c')
+  
+F:\development\steam\emulator_bot\winmerge_sidebyside\Externals\poco\Foundation\src\pcre2_convert.c(312,12): warning C4244: '=': conversion from 'uint32_t' to 'PCRE2_UCHAR8', possible loss of data [F:\development\steam\emulator_bot\winmerge_sidebyside\Src\Merge.vcxproj]
+  (compiling source file '../Externals/poco/Foundation/src/pcre2.c')
+  
+F:\development\steam\emulator_bot\winmerge_sidebyside\Externals\poco\Foundation\src\pcre2_convert.c(653,29): warning C4244: 'function': conversion from 'uint32_t' to 'PCRE2_UCHAR8', possible loss of data [F:\development\steam\emulator_bot\winmerge_sidebyside\Src\Merge.vcxproj]
+  (compiling source file '../Externals/poco/Foundation/src/pcre2.c')
+  
+F:\development\steam\emulator_bot\winmerge_sidebyside\Externals\poco\XML\src\xmltok_impl.c(359,19): warning C4127: conditional expression is constant [F:\development\steam\emulator_bot\winmerge_sidebyside\Src\Merge.vcxproj]
+  (compiling source file '../Externals/poco/XML/src/expat.c')
+  
+F:\development\steam\emulator_bot\winmerge_sidebyside\Externals\poco\Foundation\src\pcre2_convert.c(798,33): warning C4244: 'initializing': conversion from 'uint32_t' to 'PCRE2_UCHAR8', possible loss of data [F:\development\steam\emulator_bot\winmerge_sidebyside\Src\Merge.vcxproj]
+  (compiling source file '../Externals/poco/Foundation/src/pcre2.c')
+  
+F:\development\steam\emulator_bot\winmerge_sidebyside\Externals\poco\Foundation\src\pcre2_convert.c(799,30): warning C4244: 'initializing': conversion from 'uint32_t' to 'PCRE2_UCHAR8', possible loss of data [F:\development\steam\emulator_bot\winmerge_sidebyside\Src\Merge.vcxproj]
+  (compiling source file '../Externals/poco/Foundation/src/pcre2.c')
+  
+F:\development\steam\emulator_bot\winmerge_sidebyside\Externals\poco\XML\src\xmltok_impl.c(827,19): warning C4127: conditional expression is constant [F:\development\steam\emulator_bot\winmerge_sidebyside\Src\Merge.vcxproj]
+  (compiling source file '../Externals/poco/XML/src/expat.c')
+  
+F:\development\steam\emulator_bot\winmerge_sidebyside\Externals\poco\XML\src\xmltok_impl.c(1022,19): warning C4127: conditional expression is constant [F:\development\steam\emulator_bot\winmerge_sidebyside\Src\Merge.vcxproj]
+  (compiling source file '../Externals/poco/XML/src/expat.c')
+  
+F:\development\steam\emulator_bot\winmerge_sidebyside\Externals\poco\XML\src\xmltok_impl.c(1400,19): warning C4127: conditional expression is constant [F:\development\steam\emulator_bot\winmerge_sidebyside\Src\Merge.vcxproj]
+  (compiling source file '../Externals/poco/XML/src/expat.c')
+  
+F:\development\steam\emulator_bot\winmerge_sidebyside\Externals\poco\XML\src\xmltok_impl.c(282,5): warning C4127: conditional expression is constant [F:\development\steam\emulator_bot\winmerge_sidebyside\Src\Merge.vcxproj]
+  (compiling source file '../Externals/poco/XML/src/expat.c')
+  
+F:\development\steam\emulator_bot\winmerge_sidebyside\Externals\poco\XML\src\xmltok_impl.c(289,7): warning C4127: conditional expression is constant [F:\development\steam\emulator_bot\winmerge_sidebyside\Src\Merge.vcxproj]
+  (compiling source file '../Externals/poco/XML/src/expat.c')
+  
+F:\development\steam\emulator_bot\winmerge_sidebyside\Externals\poco\XML\src\xmltok_impl.c(359,19): warning C4127: conditional expression is constant [F:\development\steam\emulator_bot\winmerge_sidebyside\Src\Merge.vcxproj]
+  (compiling source file '../Externals/poco/XML/src/expat.c')
+  
+F:\development\steam\emulator_bot\winmerge_sidebyside\Externals\poco\XML\src\xmltok_impl.c(435,5): warning C4127: conditional expression is constant [F:\development\steam\emulator_bot\winmerge_sidebyside\Src\Merge.vcxproj]
+  (compiling source file '../Externals/poco/XML/src/expat.c')
+  
+F:\development\steam\emulator_bot\winmerge_sidebyside\Externals\poco\XML\src\xmltok_impl.c(442,7): warning C4127: conditional expression is constant [F:\development\steam\emulator_bot\winmerge_sidebyside\Src\Merge.vcxproj]
+  (compiling source file '../Externals/poco/XML/src/expat.c')
+  
+F:\development\steam\emulator_bot\winmerge_sidebyside\Externals\poco\XML\src\xmltok_impl.c(548,5): warning C4127: conditional expression is constant [F:\development\steam\emulator_bot\winmerge_sidebyside\Src\Merge.vcxproj]
+  (compiling source file '../Externals/poco/XML/src/expat.c')
+  
+F:\development\steam\emulator_bot\winmerge_sidebyside\Externals\poco\XML\src\xmltok_impl.c(557,7): warning C4127: conditional expression is constant [F:\development\steam\emulator_bot\winmerge_sidebyside\Src\Merge.vcxproj]
+  (compiling source file '../Externals/poco/XML/src/expat.c')
+  
+F:\development\steam\emulator_bot\winmerge_sidebyside\Externals\poco\XML\src\xmltok_impl.c(579,7): warning C4127: conditional expression is constant [F:\development\steam\emulator_bot\winmerge_sidebyside\Src\Merge.vcxproj]
+  (compiling source file '../Externals/poco/XML/src/expat.c')
+  
+F:\development\steam\emulator_bot\winmerge_sidebyside\Externals\poco\XML\src\xmltok_impl.c(590,9): warning C4127: conditional expression is constant [F:\development\steam\emulator_bot\winmerge_sidebyside\Src\Merge.vcxproj]
+  (compiling source file '../Externals/poco/XML/src/expat.c')
+  
+F:\development\steam\emulator_bot\winmerge_sidebyside\Externals\poco\XML\src\xmltok_impl.c(687,11): warning C4127: conditional expression is constant [F:\development\steam\emulator_bot\winmerge_sidebyside\Src\Merge.vcxproj]
+  (compiling source file '../Externals/poco/XML/src/expat.c')
+  
+F:\development\steam\emulator_bot\winmerge_sidebyside\Externals\poco\XML\src\xmltok_impl.c(732,5): warning C4127: conditional expression is constant [F:\development\steam\emulator_bot\winmerge_sidebyside\Src\Merge.vcxproj]
+  (compiling source file '../Externals/poco/XML/src/expat.c')
+  
+F:\development\steam\emulator_bot\winmerge_sidebyside\Externals\poco\XML\src\xmltok_impl.c(758,7): warning C4127: conditional expression is constant [F:\development\steam\emulator_bot\winmerge_sidebyside\Src\Merge.vcxproj]
+  (compiling source file '../Externals/poco/XML/src/expat.c')
+  
+F:\development\steam\emulator_bot\winmerge_sidebyside\Externals\poco\XML\src\xmltok_impl.c(769,9): warning C4127: conditional expression is constant [F:\development\steam\emulator_bot\winmerge_sidebyside\Src\Merge.vcxproj]
+  (compiling source file '../Externals/poco/XML/src/expat.c')
+  
+F:\development\steam\emulator_bot\winmerge_sidebyside\Externals\poco\XML\src\xmltok_impl.c(782,11): warning C4127: conditional expression is constant [F:\development\steam\emulator_bot\winmerge_sidebyside\Src\Merge.vcxproj]
+  (compiling source file '../Externals/poco/XML/src/expat.c')
+  
+F:\development\steam\emulator_bot\winmerge_sidebyside\Externals\poco\XML\src\xmltok_impl.c(827,19): warning C4127: conditional expression is constant [F:\development\steam\emulator_bot\winmerge_sidebyside\Src\Merge.vcxproj]
+  (compiling source file '../Externals/poco/XML/src/expat.c')
+  
+F:\development\steam\emulator_bot\winmerge_sidebyside\Externals\poco\XML\src\xmltok_impl.c(927,5): warning C4127: conditional expression is constant [F:\development\steam\emulator_bot\winmerge_sidebyside\Src\Merge.vcxproj]
+  (compiling source file '../Externals/poco/XML/src/expat.c')
+  
+F:\development\steam\emulator_bot\winmerge_sidebyside\Externals\poco\XML\src\xmltok_impl.c(940,7): warning C4127: conditional expression is constant [F:\development\steam\emulator_bot\winmerge_sidebyside\Src\Merge.vcxproj]
+  (compiling source file '../Externals/poco/XML/src/expat.c')
+  
+F:\development\steam\emulator_bot\winmerge_sidebyside\Externals\poco\XML\src\xmltok_impl.c(957,5): warning C4127: conditional expression is constant [F:\development\steam\emulator_bot\winmerge_sidebyside\Src\Merge.vcxproj]
+  (compiling source file '../Externals/poco/XML/src/expat.c')
+  
+F:\development\steam\emulator_bot\winmerge_sidebyside\Externals\poco\XML\src\xmltok_impl.c(964,7): warning C4127: conditional expression is constant [F:\development\steam\emulator_bot\winmerge_sidebyside\Src\Merge.vcxproj]
+  (compiling source file '../Externals/poco/XML/src/expat.c')
+  
+F:\development\steam\emulator_bot\winmerge_sidebyside\Externals\poco\XML\src\xmltok_impl.c(1022,19): warning C4127: conditional expression is constant [F:\development\steam\emulator_bot\winmerge_sidebyside\Src\Merge.vcxproj]
+  (compiling source file '../Externals/poco/XML/src/expat.c')
+  
+F:\development\steam\emulator_bot\winmerge_sidebyside\Externals\poco\XML\src\xmltok_impl.c(1199,7): warning C4127: conditional expression is constant [F:\development\steam\emulator_bot\winmerge_sidebyside\Src\Merge.vcxproj]
+  (compiling source file '../Externals/poco/XML/src/expat.c')
+  
+F:\development\steam\emulator_bot\winmerge_sidebyside\Externals\poco\XML\src\xmltok_impl.c(1219,11): warning C4127: conditional expression is constant [F:\development\steam\emulator_bot\winmerge_sidebyside\Src\Merge.vcxproj]
+  (compiling source file '../Externals/poco/XML/src/expat.c')
+  
+F:\development\steam\emulator_bot\winmerge_sidebyside\Externals\poco\XML\src\xmltok_impl.c(1400,19): warning C4127: conditional expression is constant [F:\development\steam\emulator_bot\winmerge_sidebyside\Src\Merge.vcxproj]
+  (compiling source file '../Externals/poco/XML/src/expat.c')
+  
+F:\development\steam\emulator_bot\winmerge_sidebyside\Externals\poco\XML\src\xmltok_impl.c(282,5): warning C4127: conditional expression is constant [F:\development\steam\emulator_bot\winmerge_sidebyside\Src\Merge.vcxproj]
+  (compiling source file '../Externals/poco/XML/src/expat.c')
+  
+F:\development\steam\emulator_bot\winmerge_sidebyside\Externals\poco\XML\src\xmltok_impl.c(289,7): warning C4127: conditional expression is constant [F:\development\steam\emulator_bot\winmerge_sidebyside\Src\Merge.vcxproj]
+  (compiling source file '../Externals/poco/XML/src/expat.c')
+  
+F:\development\steam\emulator_bot\winmerge_sidebyside\Externals\poco\XML\src\xmltok_impl.c(359,19): warning C4127: conditional expression is constant [F:\development\steam\emulator_bot\winmerge_sidebyside\Src\Merge.vcxproj]
+  (compiling source file '../Externals/poco/XML/src/expat.c')
+  
+F:\development\steam\emulator_bot\winmerge_sidebyside\Externals\poco\XML\src\xmltok_impl.c(435,5): warning C4127: conditional expression is constant [F:\development\steam\emulator_bot\winmerge_sidebyside\Src\Merge.vcxproj]
+  (compiling source file '../Externals/poco/XML/src/expat.c')
+  
+F:\development\steam\emulator_bot\winmerge_sidebyside\Externals\poco\XML\src\xmltok_impl.c(442,7): warning C4127: conditional expression is constant [F:\development\steam\emulator_bot\winmerge_sidebyside\Src\Merge.vcxproj]
+  (compiling source file '../Externals/poco/XML/src/expat.c')
+  
+F:\development\steam\emulator_bot\winmerge_sidebyside\Externals\poco\XML\src\xmltok_impl.c(548,5): warning C4127: conditional expression is constant [F:\development\steam\emulator_bot\winmerge_sidebyside\Src\Merge.vcxproj]
+  (compiling source file '../Externals/poco/XML/src/expat.c')
+  
+F:\development\steam\emulator_bot\winmerge_sidebyside\Externals\poco\XML\src\xmltok_impl.c(557,7): warning C4127: conditional expression is constant [F:\development\steam\emulator_bot\winmerge_sidebyside\Src\Merge.vcxproj]
+  (compiling source file '../Externals/poco/XML/src/expat.c')
+  
+F:\development\steam\emulator_bot\winmerge_sidebyside\Externals\poco\XML\src\xmltok_impl.c(579,7): warning C4127: conditional expression is constant [F:\development\steam\emulator_bot\winmerge_sidebyside\Src\Merge.vcxproj]
+  (compiling source file '../Externals/poco/XML/src/expat.c')
+  
+F:\development\steam\emulator_bot\winmerge_sidebyside\Externals\poco\XML\src\xmltok_impl.c(590,9): warning C4127: conditional expression is constant [F:\development\steam\emulator_bot\winmerge_sidebyside\Src\Merge.vcxproj]
+  (compiling source file '../Externals/poco/XML/src/expat.c')
+  
+F:\development\steam\emulator_bot\winmerge_sidebyside\Externals\poco\XML\src\xmltok_impl.c(687,11): warning C4127: conditional expression is constant [F:\development\steam\emulator_bot\winmerge_sidebyside\Src\Merge.vcxproj]
+  (compiling source file '../Externals/poco/XML/src/expat.c')
+  
+F:\development\steam\emulator_bot\winmerge_sidebyside\Externals\poco\XML\src\xmltok_impl.c(732,5): warning C4127: conditional expression is constant [F:\development\steam\emulator_bot\winmerge_sidebyside\Src\Merge.vcxproj]
+  (compiling source file '../Externals/poco/XML/src/expat.c')
+  
+F:\development\steam\emulator_bot\winmerge_sidebyside\Externals\poco\XML\src\xmltok_impl.c(758,7): warning C4127: conditional expression is constant [F:\development\steam\emulator_bot\winmerge_sidebyside\Src\Merge.vcxproj]
+  (compiling source file '../Externals/poco/XML/src/expat.c')
+  
+F:\development\steam\emulator_bot\winmerge_sidebyside\Externals\poco\XML\src\xmltok_impl.c(769,9): warning C4127: conditional expression is constant [F:\development\steam\emulator_bot\winmerge_sidebyside\Src\Merge.vcxproj]
+  (compiling source file '../Externals/poco/XML/src/expat.c')
+  
+F:\development\steam\emulator_bot\winmerge_sidebyside\Externals\poco\XML\src\xmltok_impl.c(782,11): warning C4127: conditional expression is constant [F:\development\steam\emulator_bot\winmerge_sidebyside\Src\Merge.vcxproj]
+  (compiling source file '../Externals/poco/XML/src/expat.c')
+  
+F:\development\steam\emulator_bot\winmerge_sidebyside\Externals\poco\XML\src\xmltok_impl.c(827,19): warning C4127: conditional expression is constant [F:\development\steam\emulator_bot\winmerge_sidebyside\Src\Merge.vcxproj]
+  (compiling source file '../Externals/poco/XML/src/expat.c')
+  
+F:\development\steam\emulator_bot\winmerge_sidebyside\Externals\poco\XML\src\xmltok_impl.c(927,5): warning C4127: conditional expression is constant [F:\development\steam\emulator_bot\winmerge_sidebyside\Src\Merge.vcxproj]
+  (compiling source file '../Externals/poco/XML/src/expat.c')
+  
+F:\development\steam\emulator_bot\winmerge_sidebyside\Externals\poco\XML\src\xmltok_impl.c(940,7): warning C4127: conditional expression is constant [F:\development\steam\emulator_bot\winmerge_sidebyside\Src\Merge.vcxproj]
+  (compiling source file '../Externals/poco/XML/src/expat.c')
+  
+F:\development\steam\emulator_bot\winmerge_sidebyside\Externals\poco\XML\src\xmltok_impl.c(957,5): warning C4127: conditional expression is constant [F:\development\steam\emulator_bot\winmerge_sidebyside\Src\Merge.vcxproj]
+  (compiling source file '../Externals/poco/XML/src/expat.c')
+  
+F:\development\steam\emulator_bot\winmerge_sidebyside\Externals\poco\XML\src\xmltok_impl.c(964,7): warning C4127: conditional expression is constant [F:\development\steam\emulator_bot\winmerge_sidebyside\Src\Merge.vcxproj]
+  (compiling source file '../Externals/poco/XML/src/expat.c')
+  
+F:\development\steam\emulator_bot\winmerge_sidebyside\Externals\poco\XML\src\xmltok_impl.c(1022,19): warning C4127: conditional expression is constant [F:\development\steam\emulator_bot\winmerge_sidebyside\Src\Merge.vcxproj]
+  (compiling source file '../Externals/poco/XML/src/expat.c')
+  
+F:\development\steam\emulator_bot\winmerge_sidebyside\Externals\poco\XML\src\xmltok_impl.c(1199,7): warning C4127: conditional expression is constant [F:\development\steam\emulator_bot\winmerge_sidebyside\Src\Merge.vcxproj]
+  (compiling source file '../Externals/poco/XML/src/expat.c')
+  
+F:\development\steam\emulator_bot\winmerge_sidebyside\Externals\poco\XML\src\xmltok_impl.c(1219,11): warning C4127: conditional expression is constant [F:\development\steam\emulator_bot\winmerge_sidebyside\Src\Merge.vcxproj]
+  (compiling source file '../Externals/poco/XML/src/expat.c')
+  
+F:\development\steam\emulator_bot\winmerge_sidebyside\Externals\poco\XML\src\xmltok_impl.c(1400,19): warning C4127: conditional expression is constant [F:\development\steam\emulator_bot\winmerge_sidebyside\Src\Merge.vcxproj]
+  (compiling source file '../Externals/poco/XML/src/expat.c')
+  
+F:\development\steam\emulator_bot\winmerge_sidebyside\Externals\poco\Foundation\src\pcre2_maketables.c(95,34): warning C4244: '=': conversion from 'int' to 'uint8_t', possible loss of data [F:\development\steam\emulator_bot\winmerge_sidebyside\Src\Merge.vcxproj]
+  (compiling source file '../Externals/poco/Foundation/src/pcre2.c')
+  
+F:\development\steam\emulator_bot\winmerge_sidebyside\Externals\poco\Foundation\src\pcre2_maketables.c(102,19): warning C4244: '=': conversion from 'int' to 'uint8_t', possible loss of data [F:\development\steam\emulator_bot\winmerge_sidebyside\Src\Merge.vcxproj]
+  (compiling source file '../Externals/poco/Foundation/src/pcre2.c')
+  
+F:\development\steam\emulator_bot\winmerge_sidebyside\Externals\poco\Foundation\src\pcre2_maketables.c(148,10): warning C4244: '=': conversion from 'int' to 'uint8_t', possible loss of data [F:\development\steam\emulator_bot\winmerge_sidebyside\Src\Merge.vcxproj]
+  (compiling source file '../Externals/poco/Foundation/src/pcre2.c')
+  
+F:\development\steam\emulator_bot\winmerge_sidebyside\Externals\poco\Foundation\src\pcre2_match.c(2943,36): warning C4389: '==': signed/unsigned mismatch [F:\development\steam\emulator_bot\winmerge_sidebyside\Src\Merge.vcxproj]
+  (compiling source file '../Externals/poco/Foundation/src/pcre2.c')
+  
+F:\development\steam\emulator_bot\winmerge_sidebyside\Externals\poco\Foundation\src\pcre2_match.c(3769,36): warning C4389: '==': signed/unsigned mismatch [F:\development\steam\emulator_bot\winmerge_sidebyside\Src\Merge.vcxproj]
+  (compiling source file '../Externals/poco/Foundation/src/pcre2.c')
+  
+F:\development\steam\emulator_bot\winmerge_sidebyside\Externals\poco\Foundation\src\pcre2_match.c(4352,36): warning C4389: '==': signed/unsigned mismatch [F:\development\steam\emulator_bot\winmerge_sidebyside\Src\Merge.vcxproj]
+  (compiling source file '../Externals/poco/Foundation/src/pcre2.c')
+  
+F:\development\steam\emulator_bot\winmerge_sidebyside\Externals\poco\Foundation\src\pcre2_match.c(7101,52): warning C4244: '=': conversion from 'uint32_t' to 'PCRE2_UCHAR8', possible loss of data [F:\development\steam\emulator_bot\winmerge_sidebyside\Src\Merge.vcxproj]
+  (compiling source file '../Externals/poco/Foundation/src/pcre2.c')
+  
+F:\development\steam\emulator_bot\winmerge_sidebyside\Externals\poco\Foundation\src\pcre2_match.c(7123,48): warning C4244: '=': conversion from 'uint32_t' to 'PCRE2_UCHAR8', possible loss of data [F:\development\steam\emulator_bot\winmerge_sidebyside\Src\Merge.vcxproj]
+  (compiling source file '../Externals/poco/Foundation/src/pcre2.c')
+  
+F:\development\steam\emulator_bot\winmerge_sidebyside\Externals\poco\Foundation\src\pcre2_match_data.c(64,20): warning C4244: '=': conversion from 'uint32_t' to 'uint16_t', possible loss of data [F:\development\steam\emulator_bot\winmerge_sidebyside\Src\Merge.vcxproj]
+  (compiling source file '../Externals/poco/Foundation/src/pcre2.c')
+  
+F:\development\steam\emulator_bot\winmerge_sidebyside\Externals\poco\Foundation\src\pcre2_ord2utf.c(92,32): warning C4244: '=': conversion from 'uint32_t' to 'PCRE2_UCHAR8', possible loss of data [F:\development\steam\emulator_bot\winmerge_sidebyside\Src\Merge.vcxproj]
+  (compiling source file '../Externals/poco/Foundation/src/pcre2.c')
+  
+F:\development\steam\emulator_bot\winmerge_sidebyside\Externals\poco\Foundation\src\pcre2_study.c(1904,39): warning C4244: '=': conversion from 'int' to 'uint16_t', possible loss of data [F:\development\steam\emulator_bot\winmerge_sidebyside\Src\Merge.vcxproj]
+  (compiling source file '../Externals/poco/Foundation/src/pcre2.c')
+  
+F:\development\steam\emulator_bot\winmerge_sidebyside\Externals\poco\Foundation\src\pcre2_substitute.c(785,24): warning C4389: '!=': signed/unsigned mismatch [F:\development\steam\emulator_bot\winmerge_sidebyside\Src\Merge.vcxproj]
+  (compiling source file '../Externals/poco/Foundation/src/pcre2.c')
+  
+F:\development\steam\emulator_bot\winmerge_sidebyside\Externals\poco\Foundation\src\pcre2_substitute.c(803,23): warning C4244: '=': conversion from 'uint32_t' to 'PCRE2_UCHAR8', possible loss of data [F:\development\steam\emulator_bot\winmerge_sidebyside\Src\Merge.vcxproj]
+  (compiling source file '../Externals/poco/Foundation/src/pcre2.c')
+  
+F:\development\steam\emulator_bot\winmerge_sidebyside\Externals\poco\Foundation\src\pcre2_substitute.c(887,20): warning C4389: '!=': signed/unsigned mismatch [F:\development\steam\emulator_bot\winmerge_sidebyside\Src\Merge.vcxproj]
+  (compiling source file '../Externals/poco/Foundation/src/pcre2.c')
+  
+F:\development\steam\emulator_bot\winmerge_sidebyside\Externals\poco\Foundation\src\pcre2_substitute.c(905,19): warning C4244: '=': conversion from 'uint32_t' to 'PCRE2_UCHAR8', possible loss of data [F:\development\steam\emulator_bot\winmerge_sidebyside\Src\Merge.vcxproj]
+  (compiling source file '../Externals/poco/Foundation/src/pcre2.c')
+  
+  Concurrent.cpp
+  ccrystaleditview.obj : MSIL .netmodule or module compiled with /GL found; restarting link with /LTCG; add /LTCG to the link command line to improve linker performance
+  
+  Searching libraries
+      Searching C:\Program Files (x86)\Windows Kits\10\lib\10.0.26100.0\um\x64\version.lib:
+      Searching C:\Program Files (x86)\Windows Kits\10\lib\10.0.26100.0\um\x64\shlwapi.lib:
+      Searching C:\Program Files (x86)\Windows Kits\10\lib\10.0.26100.0\um\x64\imm32.lib:
+      Searching C:\Program Files (x86)\Windows Kits\10\lib\10.0.26100.0\um\x64\HtmlHelp.lib:
+      Searching C:\Program Files (x86)\Windows Kits\10\lib\10.0.26100.0\um\x64\iphlpapi.lib:
+      Searching C:\Program Files\Microsoft Visual Studio\2022\Community\VC\Tools\MSVC\14.44.35207\lib\x64\Delayimp.lib:
+      Searching C:\Program Files\Microsoft Visual Studio\2022\Community\VC\Tools\MSVC\14.44.35207\atlmfc\lib\x64\afxnmcd.lib:
+      Searching C:\Program Files\Microsoft Visual Studio\2022\Community\VC\Tools\MSVC\14.44.35207\atlmfc\lib\x64\uafxcw.lib:
+      Searching C:\Program Files\Microsoft Visual Studio\2022\Community\VC\Tools\MSVC\14.44.35207\lib\x64\libcmt.lib:
+      Searching C:\Program Files (x86)\Windows Kits\10\lib\10.0.26100.0\um\x64\kernel32.lib:
+      Searching C:\Program Files (x86)\Windows Kits\10\lib\10.0.26100.0\um\x64\user32.lib:
+      Searching C:\Program Files (x86)\Windows Kits\10\lib\10.0.26100.0\um\x64\gdi32.lib:
+      Searching C:\Program Files (x86)\Windows Kits\10\lib\10.0.26100.0\um\x64\msimg32.lib:
+      Searching C:\Program Files (x86)\Windows Kits\10\lib\10.0.26100.0\um\x64\comdlg32.lib:
+      Searching C:\Program Files (x86)\Windows Kits\10\lib\10.0.26100.0\um\x64\winspool.lib:
+      Searching C:\Program Files (x86)\Windows Kits\10\lib\10.0.26100.0\um\x64\advapi32.lib:
+      Searching C:\Program Files (x86)\Windows Kits\10\lib\10.0.26100.0\um\x64\shell32.lib:
+      Searching C:\Program Files (x86)\Windows Kits\10\lib\10.0.26100.0\um\x64\comctl32.lib:
+      Searching C:\Program Files (x86)\Windows Kits\10\lib\10.0.26100.0\um\x64\uxtheme.lib:
+      Searching C:\Program Files (x86)\Windows Kits\10\lib\10.0.26100.0\um\x64\windowscodecs.lib:
+      Searching C:\Program Files (x86)\Windows Kits\10\lib\10.0.26100.0\um\x64\uuid.lib:
+      Searching C:\Program Files\Microsoft Visual Studio\2022\Community\VC\Tools\MSVC\14.44.35207\atlmfc\lib\x64\atls.lib:
+      Searching C:\Program Files (x86)\Windows Kits\10\lib\10.0.26100.0\um\x64\ole32.lib:
+      Searching C:\Program Files (x86)\Windows Kits\10\lib\10.0.26100.0\um\x64\oleaut32.lib:
+      Searching C:\Program Files (x86)\Windows Kits\10\lib\10.0.26100.0\um\x64\oledlg.lib:
+      Searching C:\Program Files (x86)\Windows Kits\10\lib\10.0.26100.0\um\x64\urlmon.lib:
+      Searching C:\Program Files (x86)\Windows Kits\10\lib\10.0.26100.0\um\x64\gdiplus.lib:
+      Searching C:\Program Files\Microsoft Visual Studio\2022\Community\VC\Tools\MSVC\14.44.35207\lib\x64\libcpmt.lib:
+      Searching C:\Program Files\Microsoft Visual Studio\2022\Community\VC\Tools\MSVC\14.44.35207\lib\x64\OLDNAMES.lib:
+      Searching C:\Program Files (x86)\Windows Kits\10\lib\10.0.26100.0\um\x64\bcrypt.lib:
+      Searching C:\Program Files (x86)\Windows Kits\10\lib\10.0.26100.0\um\x64\propsys.lib:
+      Searching C:\Program Files\Microsoft Visual Studio\2022\Community\VC\Tools\MSVC\14.44.35207\lib\x64\comsuppw.lib:
+      Searching C:\Program Files (x86)\Windows Kits\10\lib\10.0.26100.0\um\x64\ws2_32.lib:
+      Searching C:\Program Files (x86)\Windows Kits\10\lib\10.0.26100.0\um\x64\mswsock.lib:
+      Searching C:\Program Files (x86)\Windows Kits\10\lib\10.0.26100.0\um\x64\oleacc.lib:
+      Searching C:\Program Files (x86)\Windows Kits\10\lib\10.0.26100.0\um\x64\wininet.lib:
+      Searching C:\Program Files\Microsoft Visual Studio\2022\Community\VC\Tools\MSVC\14.44.35207\lib\x64\libvcruntime.lib:
+      Searching C:\Program Files (x86)\Windows Kits\10\lib\10.0.26100.0\ucrt\x64\libucrt.lib:
+      Searching C:\Program Files (x86)\Windows Kits\10\lib\10.0.26100.0\um\x64\version.lib:
+      Searching C:\Program Files (x86)\Windows Kits\10\lib\10.0.26100.0\um\x64\shlwapi.lib:
+      Searching C:\Program Files (x86)\Windows Kits\10\lib\10.0.26100.0\um\x64\imm32.lib:
+      Searching C:\Program Files (x86)\Windows Kits\10\lib\10.0.26100.0\um\x64\HtmlHelp.lib:
+      Searching C:\Program Files (x86)\Windows Kits\10\lib\10.0.26100.0\um\x64\iphlpapi.lib:
+      Searching C:\Program Files\Microsoft Visual Studio\2022\Community\VC\Tools\MSVC\14.44.35207\lib\x64\Delayimp.lib:
+      Searching C:\Program Files\Microsoft Visual Studio\2022\Community\VC\Tools\MSVC\14.44.35207\atlmfc\lib\x64\afxnmcd.lib:
+      Searching C:\Program Files\Microsoft Visual Studio\2022\Community\VC\Tools\MSVC\14.44.35207\atlmfc\lib\x64\uafxcw.lib:
+      Searching C:\Program Files\Microsoft Visual Studio\2022\Community\VC\Tools\MSVC\14.44.35207\lib\x64\libcmt.lib:
+      Searching C:\Program Files (x86)\Windows Kits\10\lib\10.0.26100.0\um\x64\kernel32.lib:
+      Searching C:\Program Files (x86)\Windows Kits\10\lib\10.0.26100.0\um\x64\user32.lib:
+      Searching C:\Program Files (x86)\Windows Kits\10\lib\10.0.26100.0\um\x64\gdi32.lib:
+      Searching C:\Program Files (x86)\Windows Kits\10\lib\10.0.26100.0\um\x64\msimg32.lib:
+      Searching C:\Program Files (x86)\Windows Kits\10\lib\10.0.26100.0\um\x64\comdlg32.lib:
+      Searching C:\Program Files (x86)\Windows Kits\10\lib\10.0.26100.0\um\x64\winspool.lib:
+      Searching C:\Program Files (x86)\Windows Kits\10\lib\10.0.26100.0\um\x64\advapi32.lib:
+      Searching C:\Program Files (x86)\Windows Kits\10\lib\10.0.26100.0\um\x64\shell32.lib:
+      Searching C:\Program Files (x86)\Windows Kits\10\lib\10.0.26100.0\um\x64\comctl32.lib:
+      Searching C:\Program Files (x86)\Windows Kits\10\lib\10.0.26100.0\um\x64\uxtheme.lib:
+      Searching C:\Program Files (x86)\Windows Kits\10\lib\10.0.26100.0\um\x64\windowscodecs.lib:
+      Searching C:\Program Files (x86)\Windows Kits\10\lib\10.0.26100.0\um\x64\uuid.lib:
+      Searching C:\Program Files\Microsoft Visual Studio\2022\Community\VC\Tools\MSVC\14.44.35207\atlmfc\lib\x64\atls.lib:
+      Searching C:\Program Files (x86)\Windows Kits\10\lib\10.0.26100.0\um\x64\ole32.lib:
+      Searching C:\Program Files (x86)\Windows Kits\10\lib\10.0.26100.0\um\x64\oleaut32.lib:
+      Searching C:\Program Files (x86)\Windows Kits\10\lib\10.0.26100.0\um\x64\oledlg.lib:
+      Searching C:\Program Files (x86)\Windows Kits\10\lib\10.0.26100.0\um\x64\urlmon.lib:
+      Searching C:\Program Files (x86)\Windows Kits\10\lib\10.0.26100.0\um\x64\gdiplus.lib:
+      Searching C:\Program Files\Microsoft Visual Studio\2022\Community\VC\Tools\MSVC\14.44.35207\lib\x64\libcpmt.lib:
+      Searching C:\Program Files\Microsoft Visual Studio\2022\Community\VC\Tools\MSVC\14.44.35207\lib\x64\OLDNAMES.lib:
+      Searching C:\Program Files (x86)\Windows Kits\10\lib\10.0.26100.0\um\x64\bcrypt.lib:
+      Searching C:\Program Files (x86)\Windows Kits\10\lib\10.0.26100.0\um\x64\propsys.lib:
+      Searching C:\Program Files\Microsoft Visual Studio\2022\Community\VC\Tools\MSVC\14.44.35207\lib\x64\comsuppw.lib:
+      Searching C:\Program Files (x86)\Windows Kits\10\lib\10.0.26100.0\um\x64\ws2_32.lib:
+      Searching C:\Program Files (x86)\Windows Kits\10\lib\10.0.26100.0\um\x64\mswsock.lib:
+      Searching C:\Program Files (x86)\Windows Kits\10\lib\10.0.26100.0\um\x64\oleacc.lib:
+      Searching C:\Program Files (x86)\Windows Kits\10\lib\10.0.26100.0\um\x64\wininet.lib:
+      Searching C:\Program Files\Microsoft Visual Studio\2022\Community\VC\Tools\MSVC\14.44.35207\lib\x64\libvcruntime.lib:
+      Searching C:\Program Files (x86)\Windows Kits\10\lib\10.0.26100.0\ucrt\x64\libucrt.lib:
+      Searching C:\Program Files (x86)\Windows Kits\10\lib\10.0.26100.0\um\x64\version.lib:
+      Searching C:\Program Files (x86)\Windows Kits\10\lib\10.0.26100.0\um\x64\shlwapi.lib:
+      Searching C:\Program Files (x86)\Windows Kits\10\lib\10.0.26100.0\um\x64\imm32.lib:
+      Searching C:\Program Files (x86)\Windows Kits\10\lib\10.0.26100.0\um\x64\HtmlHelp.lib:
+      Searching C:\Program Files (x86)\Windows Kits\10\lib\10.0.26100.0\um\x64\iphlpapi.lib:
+      Searching C:\Program Files\Microsoft Visual Studio\2022\Community\VC\Tools\MSVC\14.44.35207\lib\x64\Delayimp.lib:
+      Searching C:\Program Files\Microsoft Visual Studio\2022\Community\VC\Tools\MSVC\14.44.35207\atlmfc\lib\x64\afxnmcd.lib:
+      Searching C:\Program Files\Microsoft Visual Studio\2022\Community\VC\Tools\MSVC\14.44.35207\atlmfc\lib\x64\uafxcw.lib:
+      Searching C:\Program Files\Microsoft Visual Studio\2022\Community\VC\Tools\MSVC\14.44.35207\lib\x64\libcmt.lib:
+      Searching C:\Program Files (x86)\Windows Kits\10\lib\10.0.26100.0\um\x64\kernel32.lib:
+      Searching C:\Program Files (x86)\Windows Kits\10\lib\10.0.26100.0\um\x64\user32.lib:
+      Searching C:\Program Files (x86)\Windows Kits\10\lib\10.0.26100.0\um\x64\gdi32.lib:
+      Searching C:\Program Files (x86)\Windows Kits\10\lib\10.0.26100.0\um\x64\msimg32.lib:
+      Searching C:\Program Files (x86)\Windows Kits\10\lib\10.0.26100.0\um\x64\comdlg32.lib:
+      Searching C:\Program Files (x86)\Windows Kits\10\lib\10.0.26100.0\um\x64\winspool.lib:
+      Searching C:\Program Files (x86)\Windows Kits\10\lib\10.0.26100.0\um\x64\advapi32.lib:
+      Searching C:\Program Files (x86)\Windows Kits\10\lib\10.0.26100.0\um\x64\shell32.lib:
+      Searching C:\Program Files (x86)\Windows Kits\10\lib\10.0.26100.0\um\x64\comctl32.lib:
+      Searching C:\Program Files (x86)\Windows Kits\10\lib\10.0.26100.0\um\x64\uxtheme.lib:
+      Searching C:\Program Files (x86)\Windows Kits\10\lib\10.0.26100.0\um\x64\windowscodecs.lib:
+      Searching C:\Program Files (x86)\Windows Kits\10\lib\10.0.26100.0\um\x64\uuid.lib:
+      Searching C:\Program Files\Microsoft Visual Studio\2022\Community\VC\Tools\MSVC\14.44.35207\atlmfc\lib\x64\atls.lib:
+      Searching C:\Program Files (x86)\Windows Kits\10\lib\10.0.26100.0\um\x64\ole32.lib:
+      Searching C:\Program Files (x86)\Windows Kits\10\lib\10.0.26100.0\um\x64\oleaut32.lib:
+      Searching C:\Program Files (x86)\Windows Kits\10\lib\10.0.26100.0\um\x64\oledlg.lib:
+      Searching C:\Program Files (x86)\Windows Kits\10\lib\10.0.26100.0\um\x64\urlmon.lib:
+      Searching C:\Program Files (x86)\Windows Kits\10\lib\10.0.26100.0\um\x64\gdiplus.lib:
+      Searching C:\Program Files\Microsoft Visual Studio\2022\Community\VC\Tools\MSVC\14.44.35207\lib\x64\libcpmt.lib:
+      Searching C:\Program Files\Microsoft Visual Studio\2022\Community\VC\Tools\MSVC\14.44.35207\lib\x64\OLDNAMES.lib:
+      Searching C:\Program Files (x86)\Windows Kits\10\lib\10.0.26100.0\um\x64\bcrypt.lib:
+      Searching C:\Program Files (x86)\Windows Kits\10\lib\10.0.26100.0\um\x64\propsys.lib:
+      Searching C:\Program Files\Microsoft Visual Studio\2022\Community\VC\Tools\MSVC\14.44.35207\lib\x64\comsuppw.lib:
+      Searching C:\Program Files (x86)\Windows Kits\10\lib\10.0.26100.0\um\x64\ws2_32.lib:
+      Searching C:\Program Files (x86)\Windows Kits\10\lib\10.0.26100.0\um\x64\mswsock.lib:
+      Searching C:\Program Files (x86)\Windows Kits\10\lib\10.0.26100.0\um\x64\oleacc.lib:
+      Searching C:\Program Files (x86)\Windows Kits\10\lib\10.0.26100.0\um\x64\wininet.lib:
+      Searching C:\Program Files\Microsoft Visual Studio\2022\Community\VC\Tools\MSVC\14.44.35207\lib\x64\libvcruntime.lib:
+      Searching C:\Program Files (x86)\Windows Kits\10\lib\10.0.26100.0\ucrt\x64\libucrt.lib:
+      Searching C:\Program Files (x86)\Windows Kits\10\lib\10.0.26100.0\um\x64\version.lib:
+      Searching C:\Program Files (x86)\Windows Kits\10\lib\10.0.26100.0\um\x64\shlwapi.lib:
+      Searching C:\Program Files (x86)\Windows Kits\10\lib\10.0.26100.0\um\x64\imm32.lib:
+      Searching C:\Program Files (x86)\Windows Kits\10\lib\10.0.26100.0\um\x64\HtmlHelp.lib:
+      Searching C:\Program Files (x86)\Windows Kits\10\lib\10.0.26100.0\um\x64\iphlpapi.lib:
+      Searching C:\Program Files\Microsoft Visual Studio\2022\Community\VC\Tools\MSVC\14.44.35207\lib\x64\Delayimp.lib:
+      Searching C:\Program Files\Microsoft Visual Studio\2022\Community\VC\Tools\MSVC\14.44.35207\atlmfc\lib\x64\afxnmcd.lib:
+      Searching C:\Program Files\Microsoft Visual Studio\2022\Community\VC\Tools\MSVC\14.44.35207\atlmfc\lib\x64\uafxcw.lib:
+      Searching C:\Program Files\Microsoft Visual Studio\2022\Community\VC\Tools\MSVC\14.44.35207\lib\x64\libcmt.lib:
+  
+  Finished searching libraries
+  
+  Searching libraries
+      Searching C:\Program Files (x86)\Windows Kits\10\lib\10.0.26100.0\um\x64\version.lib:
+      Searching C:\Program Files (x86)\Windows Kits\10\lib\10.0.26100.0\um\x64\shlwapi.lib:
+      Searching C:\Program Files (x86)\Windows Kits\10\lib\10.0.26100.0\um\x64\imm32.lib:
+      Searching C:\Program Files (x86)\Windows Kits\10\lib\10.0.26100.0\um\x64\HtmlHelp.lib:
+      Searching C:\Program Files (x86)\Windows Kits\10\lib\10.0.26100.0\um\x64\iphlpapi.lib:
+      Searching C:\Program Files\Microsoft Visual Studio\2022\Community\VC\Tools\MSVC\14.44.35207\lib\x64\Delayimp.lib:
+      Searching C:\Program Files\Microsoft Visual Studio\2022\Community\VC\Tools\MSVC\14.44.35207\atlmfc\lib\x64\afxnmcd.lib:
+      Searching C:\Program Files\Microsoft Visual Studio\2022\Community\VC\Tools\MSVC\14.44.35207\atlmfc\lib\x64\uafxcw.lib:
+      Searching C:\Program Files\Microsoft Visual Studio\2022\Community\VC\Tools\MSVC\14.44.35207\lib\x64\libcmt.lib:
+      Searching C:\Program Files (x86)\Windows Kits\10\lib\10.0.26100.0\um\x64\kernel32.lib:
+      Searching C:\Program Files (x86)\Windows Kits\10\lib\10.0.26100.0\um\x64\user32.lib:
+      Searching C:\Program Files (x86)\Windows Kits\10\lib\10.0.26100.0\um\x64\gdi32.lib:
+      Searching C:\Program Files (x86)\Windows Kits\10\lib\10.0.26100.0\um\x64\msimg32.lib:
+      Searching C:\Program Files (x86)\Windows Kits\10\lib\10.0.26100.0\um\x64\comdlg32.lib:
+      Searching C:\Program Files (x86)\Windows Kits\10\lib\10.0.26100.0\um\x64\winspool.lib:
+      Searching C:\Program Files (x86)\Windows Kits\10\lib\10.0.26100.0\um\x64\advapi32.lib:
+      Searching C:\Program Files (x86)\Windows Kits\10\lib\10.0.26100.0\um\x64\shell32.lib:
+      Searching C:\Program Files (x86)\Windows Kits\10\lib\10.0.26100.0\um\x64\comctl32.lib:
+      Searching C:\Program Files (x86)\Windows Kits\10\lib\10.0.26100.0\um\x64\uxtheme.lib:
+      Searching C:\Program Files (x86)\Windows Kits\10\lib\10.0.26100.0\um\x64\windowscodecs.lib:
+      Searching C:\Program Files (x86)\Windows Kits\10\lib\10.0.26100.0\um\x64\uuid.lib:
+      Searching C:\Program Files\Microsoft Visual Studio\2022\Community\VC\Tools\MSVC\14.44.35207\atlmfc\lib\x64\atls.lib:
+      Searching C:\Program Files (x86)\Windows Kits\10\lib\10.0.26100.0\um\x64\ole32.lib:
+      Searching C:\Program Files (x86)\Windows Kits\10\lib\10.0.26100.0\um\x64\oleaut32.lib:
+      Searching C:\Program Files (x86)\Windows Kits\10\lib\10.0.26100.0\um\x64\oledlg.lib:
+      Searching C:\Program Files (x86)\Windows Kits\10\lib\10.0.26100.0\um\x64\urlmon.lib:
+      Searching C:\Program Files (x86)\Windows Kits\10\lib\10.0.26100.0\um\x64\gdiplus.lib:
+      Searching C:\Program Files\Microsoft Visual Studio\2022\Community\VC\Tools\MSVC\14.44.35207\lib\x64\libcpmt.lib:
+      Searching C:\Program Files\Microsoft Visual Studio\2022\Community\VC\Tools\MSVC\14.44.35207\lib\x64\OLDNAMES.lib:
+      Searching C:\Program Files (x86)\Windows Kits\10\lib\10.0.26100.0\um\x64\bcrypt.lib:
+      Searching C:\Program Files (x86)\Windows Kits\10\lib\10.0.26100.0\um\x64\propsys.lib:
+      Searching C:\Program Files\Microsoft Visual Studio\2022\Community\VC\Tools\MSVC\14.44.35207\lib\x64\comsuppw.lib:
+      Searching C:\Program Files (x86)\Windows Kits\10\lib\10.0.26100.0\um\x64\ws2_32.lib:
+      Searching C:\Program Files (x86)\Windows Kits\10\lib\10.0.26100.0\um\x64\mswsock.lib:
+      Searching C:\Program Files (x86)\Windows Kits\10\lib\10.0.26100.0\um\x64\oleacc.lib:
+      Searching C:\Program Files (x86)\Windows Kits\10\lib\10.0.26100.0\um\x64\wininet.lib:
+      Searching C:\Program Files\Microsoft Visual Studio\2022\Community\VC\Tools\MSVC\14.44.35207\lib\x64\libvcruntime.lib:
+      Searching C:\Program Files (x86)\Windows Kits\10\lib\10.0.26100.0\ucrt\x64\libucrt.lib:
+      Searching C:\Program Files (x86)\Windows Kits\10\lib\10.0.26100.0\um\x64\version.lib:
+      Searching C:\Program Files (x86)\Windows Kits\10\lib\10.0.26100.0\um\x64\shlwapi.lib:
+      Searching C:\Program Files (x86)\Windows Kits\10\lib\10.0.26100.0\um\x64\imm32.lib:
+      Searching C:\Program Files (x86)\Windows Kits\10\lib\10.0.26100.0\um\x64\HtmlHelp.lib:
+      Searching C:\Program Files (x86)\Windows Kits\10\lib\10.0.26100.0\um\x64\iphlpapi.lib:
+      Searching C:\Program Files\Microsoft Visual Studio\2022\Community\VC\Tools\MSVC\14.44.35207\lib\x64\Delayimp.lib:
+      Searching C:\Program Files\Microsoft Visual Studio\2022\Community\VC\Tools\MSVC\14.44.35207\atlmfc\lib\x64\afxnmcd.lib:
+      Searching C:\Program Files\Microsoft Visual Studio\2022\Community\VC\Tools\MSVC\14.44.35207\atlmfc\lib\x64\uafxcw.lib:
+      Searching C:\Program Files\Microsoft Visual Studio\2022\Community\VC\Tools\MSVC\14.44.35207\lib\x64\libcmt.lib:
+      Searching C:\Program Files (x86)\Windows Kits\10\lib\10.0.26100.0\um\x64\kernel32.lib:
+      Searching C:\Program Files (x86)\Windows Kits\10\lib\10.0.26100.0\um\x64\user32.lib:
+      Searching C:\Program Files (x86)\Windows Kits\10\lib\10.0.26100.0\um\x64\gdi32.lib:
+      Searching C:\Program Files (x86)\Windows Kits\10\lib\10.0.26100.0\um\x64\msimg32.lib:
+      Searching C:\Program Files (x86)\Windows Kits\10\lib\10.0.26100.0\um\x64\comdlg32.lib:
+      Searching C:\Program Files (x86)\Windows Kits\10\lib\10.0.26100.0\um\x64\winspool.lib:
+      Searching C:\Program Files (x86)\Windows Kits\10\lib\10.0.26100.0\um\x64\advapi32.lib:
+      Searching C:\Program Files (x86)\Windows Kits\10\lib\10.0.26100.0\um\x64\shell32.lib:
+      Searching C:\Program Files (x86)\Windows Kits\10\lib\10.0.26100.0\um\x64\comctl32.lib:
+      Searching C:\Program Files (x86)\Windows Kits\10\lib\10.0.26100.0\um\x64\uxtheme.lib:
+      Searching C:\Program Files (x86)\Windows Kits\10\lib\10.0.26100.0\um\x64\windowscodecs.lib:
+      Searching C:\Program Files (x86)\Windows Kits\10\lib\10.0.26100.0\um\x64\uuid.lib:
+      Searching C:\Program Files\Microsoft Visual Studio\2022\Community\VC\Tools\MSVC\14.44.35207\atlmfc\lib\x64\atls.lib:
+      Searching C:\Program Files (x86)\Windows Kits\10\lib\10.0.26100.0\um\x64\ole32.lib:
+      Searching C:\Program Files (x86)\Windows Kits\10\lib\10.0.26100.0\um\x64\oleaut32.lib:
+      Searching C:\Program Files (x86)\Windows Kits\10\lib\10.0.26100.0\um\x64\oledlg.lib:
+      Searching C:\Program Files (x86)\Windows Kits\10\lib\10.0.26100.0\um\x64\urlmon.lib:
+      Searching C:\Program Files (x86)\Windows Kits\10\lib\10.0.26100.0\um\x64\gdiplus.lib:
+  
+  Finished searching libraries
+  
+  Searching libraries
+      Searching C:\Program Files (x86)\Windows Kits\10\lib\10.0.26100.0\um\x64\version.lib:
+      Searching C:\Program Files (x86)\Windows Kits\10\lib\10.0.26100.0\um\x64\shlwapi.lib:
+      Searching C:\Program Files (x86)\Windows Kits\10\lib\10.0.26100.0\um\x64\imm32.lib:
+      Searching C:\Program Files (x86)\Windows Kits\10\lib\10.0.26100.0\um\x64\HtmlHelp.lib:
+      Searching C:\Program Files (x86)\Windows Kits\10\lib\10.0.26100.0\um\x64\iphlpapi.lib:
+      Searching C:\Program Files\Microsoft Visual Studio\2022\Community\VC\Tools\MSVC\14.44.35207\lib\x64\Delayimp.lib:
+      Searching C:\Program Files\Microsoft Visual Studio\2022\Community\VC\Tools\MSVC\14.44.35207\atlmfc\lib\x64\afxnmcd.lib:
+      Searching C:\Program Files\Microsoft Visual Studio\2022\Community\VC\Tools\MSVC\14.44.35207\atlmfc\lib\x64\uafxcw.lib:
+      Searching C:\Program Files\Microsoft Visual Studio\2022\Community\VC\Tools\MSVC\14.44.35207\lib\x64\libcmt.lib:
+      Searching C:\Program Files (x86)\Windows Kits\10\lib\10.0.26100.0\um\x64\kernel32.lib:
+      Searching C:\Program Files (x86)\Windows Kits\10\lib\10.0.26100.0\um\x64\user32.lib:
+      Searching C:\Program Files (x86)\Windows Kits\10\lib\10.0.26100.0\um\x64\gdi32.lib:
+      Searching C:\Program Files (x86)\Windows Kits\10\lib\10.0.26100.0\um\x64\msimg32.lib:
+      Searching C:\Program Files (x86)\Windows Kits\10\lib\10.0.26100.0\um\x64\comdlg32.lib:
+      Searching C:\Program Files (x86)\Windows Kits\10\lib\10.0.26100.0\um\x64\winspool.lib:
+      Searching C:\Program Files (x86)\Windows Kits\10\lib\10.0.26100.0\um\x64\advapi32.lib:
+      Searching C:\Program Files (x86)\Windows Kits\10\lib\10.0.26100.0\um\x64\shell32.lib:
+      Searching C:\Program Files (x86)\Windows Kits\10\lib\10.0.26100.0\um\x64\comctl32.lib:
+      Searching C:\Program Files (x86)\Windows Kits\10\lib\10.0.26100.0\um\x64\uxtheme.lib:
+      Searching C:\Program Files (x86)\Windows Kits\10\lib\10.0.26100.0\um\x64\windowscodecs.lib:
+      Searching C:\Program Files (x86)\Windows Kits\10\lib\10.0.26100.0\um\x64\uuid.lib:
+      Searching C:\Program Files\Microsoft Visual Studio\2022\Community\VC\Tools\MSVC\14.44.35207\atlmfc\lib\x64\atls.lib:
+      Searching C:\Program Files (x86)\Windows Kits\10\lib\10.0.26100.0\um\x64\ole32.lib:
+      Searching C:\Program Files (x86)\Windows Kits\10\lib\10.0.26100.0\um\x64\oleaut32.lib:
+      Searching C:\Program Files (x86)\Windows Kits\10\lib\10.0.26100.0\um\x64\oledlg.lib:
+      Searching C:\Program Files (x86)\Windows Kits\10\lib\10.0.26100.0\um\x64\urlmon.lib:
+      Searching C:\Program Files (x86)\Windows Kits\10\lib\10.0.26100.0\um\x64\gdiplus.lib:
+      Searching C:\Program Files\Microsoft Visual Studio\2022\Community\VC\Tools\MSVC\14.44.35207\lib\x64\libcpmt.lib:
+      Searching C:\Program Files\Microsoft Visual Studio\2022\Community\VC\Tools\MSVC\14.44.35207\lib\x64\OLDNAMES.lib:
+      Searching C:\Program Files (x86)\Windows Kits\10\lib\10.0.26100.0\um\x64\bcrypt.lib:
+      Searching C:\Program Files (x86)\Windows Kits\10\lib\10.0.26100.0\um\x64\propsys.lib:
+      Searching C:\Program Files\Microsoft Visual Studio\2022\Community\VC\Tools\MSVC\14.44.35207\lib\x64\comsuppw.lib:
+      Searching C:\Program Files (x86)\Windows Kits\10\lib\10.0.26100.0\um\x64\ws2_32.lib:
+      Searching C:\Program Files (x86)\Windows Kits\10\lib\10.0.26100.0\um\x64\mswsock.lib:
+      Searching C:\Program Files (x86)\Windows Kits\10\lib\10.0.26100.0\um\x64\oleacc.lib:
+      Searching C:\Program Files (x86)\Windows Kits\10\lib\10.0.26100.0\um\x64\wininet.lib:
+      Searching C:\Program Files\Microsoft Visual Studio\2022\Community\VC\Tools\MSVC\14.44.35207\lib\x64\libvcruntime.lib:
+      Searching C:\Program Files (x86)\Windows Kits\10\lib\10.0.26100.0\ucrt\x64\libucrt.lib:
+  
+  Finished searching libraries
+  
+  Searching libraries
+      Searching C:\Program Files (x86)\Windows Kits\10\lib\10.0.26100.0\um\x64\version.lib:
+      Searching C:\Program Files (x86)\Windows Kits\10\lib\10.0.26100.0\um\x64\shlwapi.lib:
+      Searching C:\Program Files (x86)\Windows Kits\10\lib\10.0.26100.0\um\x64\imm32.lib:
+      Searching C:\Program Files (x86)\Windows Kits\10\lib\10.0.26100.0\um\x64\HtmlHelp.lib:
+      Searching C:\Program Files (x86)\Windows Kits\10\lib\10.0.26100.0\um\x64\iphlpapi.lib:
+      Searching C:\Program Files\Microsoft Visual Studio\2022\Community\VC\Tools\MSVC\14.44.35207\lib\x64\Delayimp.lib:
+      Searching C:\Program Files\Microsoft Visual Studio\2022\Community\VC\Tools\MSVC\14.44.35207\atlmfc\lib\x64\afxnmcd.lib:
+      Searching C:\Program Files\Microsoft Visual Studio\2022\Community\VC\Tools\MSVC\14.44.35207\atlmfc\lib\x64\uafxcw.lib:
+      Searching C:\Program Files\Microsoft Visual Studio\2022\Community\VC\Tools\MSVC\14.44.35207\lib\x64\libcmt.lib:
+      Searching C:\Program Files (x86)\Windows Kits\10\lib\10.0.26100.0\um\x64\kernel32.lib:
+      Searching C:\Program Files (x86)\Windows Kits\10\lib\10.0.26100.0\um\x64\user32.lib:
+      Searching C:\Program Files (x86)\Windows Kits\10\lib\10.0.26100.0\um\x64\gdi32.lib:
+      Searching C:\Program Files (x86)\Windows Kits\10\lib\10.0.26100.0\um\x64\msimg32.lib:
+      Searching C:\Program Files (x86)\Windows Kits\10\lib\10.0.26100.0\um\x64\comdlg32.lib:
+      Searching C:\Program Files (x86)\Windows Kits\10\lib\10.0.26100.0\um\x64\winspool.lib:
+      Searching C:\Program Files (x86)\Windows Kits\10\lib\10.0.26100.0\um\x64\advapi32.lib:
+      Searching C:\Program Files (x86)\Windows Kits\10\lib\10.0.26100.0\um\x64\shell32.lib:
+      Searching C:\Program Files (x86)\Windows Kits\10\lib\10.0.26100.0\um\x64\comctl32.lib:
+      Searching C:\Program Files (x86)\Windows Kits\10\lib\10.0.26100.0\um\x64\uxtheme.lib:
+      Searching C:\Program Files (x86)\Windows Kits\10\lib\10.0.26100.0\um\x64\windowscodecs.lib:
+      Searching C:\Program Files (x86)\Windows Kits\10\lib\10.0.26100.0\um\x64\uuid.lib:
+      Searching C:\Program Files\Microsoft Visual Studio\2022\Community\VC\Tools\MSVC\14.44.35207\atlmfc\lib\x64\atls.lib:
+      Searching C:\Program Files (x86)\Windows Kits\10\lib\10.0.26100.0\um\x64\ole32.lib:
+      Searching C:\Program Files (x86)\Windows Kits\10\lib\10.0.26100.0\um\x64\oleaut32.lib:
+      Searching C:\Program Files (x86)\Windows Kits\10\lib\10.0.26100.0\um\x64\oledlg.lib:
+      Searching C:\Program Files (x86)\Windows Kits\10\lib\10.0.26100.0\um\x64\urlmon.lib:
+      Searching C:\Program Files (x86)\Windows Kits\10\lib\10.0.26100.0\um\x64\gdiplus.lib:
+      Searching C:\Program Files\Microsoft Visual Studio\2022\Community\VC\Tools\MSVC\14.44.35207\lib\x64\libcpmt.lib:
+      Searching C:\Program Files\Microsoft Visual Studio\2022\Community\VC\Tools\MSVC\14.44.35207\lib\x64\OLDNAMES.lib:
+      Searching C:\Program Files (x86)\Windows Kits\10\lib\10.0.26100.0\um\x64\bcrypt.lib:
+      Searching C:\Program Files (x86)\Windows Kits\10\lib\10.0.26100.0\um\x64\propsys.lib:
+      Searching C:\Program Files\Microsoft Visual Studio\2022\Community\VC\Tools\MSVC\14.44.35207\lib\x64\comsuppw.lib:
+      Searching C:\Program Files (x86)\Windows Kits\10\lib\10.0.26100.0\um\x64\ws2_32.lib:
+      Searching C:\Program Files (x86)\Windows Kits\10\lib\10.0.26100.0\um\x64\mswsock.lib:
+      Searching C:\Program Files (x86)\Windows Kits\10\lib\10.0.26100.0\um\x64\oleacc.lib:
+      Searching C:\Program Files (x86)\Windows Kits\10\lib\10.0.26100.0\um\x64\wininet.lib:
+      Searching C:\Program Files\Microsoft Visual Studio\2022\Community\VC\Tools\MSVC\14.44.35207\lib\x64\libvcruntime.lib:
+      Searching C:\Program Files (x86)\Windows Kits\10\lib\10.0.26100.0\ucrt\x64\libucrt.lib:
+  
+  Finished searching libraries
+  Generating code
+F:\development\steam\emulator_bot\winmerge_sidebyside\Externals\poco\Foundation\src\pcre2_compile.c(5187): warning C4701: potentially uninitialized local variable 'othercase' used [F:\development\steam\emulator_bot\winmerge_sidebyside\Src\Merge.vcxproj]
+F:\development\steam\emulator_bot\winmerge_sidebyside\Externals\poco\Foundation\src\pcre2_compile.c(9339): warning C4702: unreachable code [F:\development\steam\emulator_bot\winmerge_sidebyside\Src\Merge.vcxproj]
+F:\development\steam\emulator_bot\winmerge_sidebyside\Externals\poco\Foundation\src\pcre2_compile.c(2273): warning C4701: potentially uninitialized local variable 'i' used [F:\development\steam\emulator_bot\winmerge_sidebyside\Src\Merge.vcxproj]
+  Finished generating code
+  
+  Searching libraries
+      Searching C:\Program Files (x86)\Windows Kits\10\lib\10.0.26100.0\um\x64\version.lib:
+      Searching C:\Program Files (x86)\Windows Kits\10\lib\10.0.26100.0\um\x64\shlwapi.lib:
+      Searching C:\Program Files (x86)\Windows Kits\10\lib\10.0.26100.0\um\x64\imm32.lib:
+      Searching C:\Program Files (x86)\Windows Kits\10\lib\10.0.26100.0\um\x64\HtmlHelp.lib:
+      Searching C:\Program Files (x86)\Windows Kits\10\lib\10.0.26100.0\um\x64\iphlpapi.lib:
+      Searching C:\Program Files\Microsoft Visual Studio\2022\Community\VC\Tools\MSVC\14.44.35207\lib\x64\Delayimp.lib:
+      Searching C:\Program Files\Microsoft Visual Studio\2022\Community\VC\Tools\MSVC\14.44.35207\atlmfc\lib\x64\afxnmcd.lib:
+      Searching C:\Program Files\Microsoft Visual Studio\2022\Community\VC\Tools\MSVC\14.44.35207\atlmfc\lib\x64\uafxcw.lib:
+      Searching C:\Program Files\Microsoft Visual Studio\2022\Community\VC\Tools\MSVC\14.44.35207\lib\x64\libcmt.lib:
+      Searching C:\Program Files (x86)\Windows Kits\10\lib\10.0.26100.0\um\x64\kernel32.lib:
+      Searching C:\Program Files (x86)\Windows Kits\10\lib\10.0.26100.0\um\x64\user32.lib:
+      Searching C:\Program Files (x86)\Windows Kits\10\lib\10.0.26100.0\um\x64\gdi32.lib:
+      Searching C:\Program Files (x86)\Windows Kits\10\lib\10.0.26100.0\um\x64\msimg32.lib:
+      Searching C:\Program Files (x86)\Windows Kits\10\lib\10.0.26100.0\um\x64\comdlg32.lib:
+      Searching C:\Program Files (x86)\Windows Kits\10\lib\10.0.26100.0\um\x64\winspool.lib:
+      Searching C:\Program Files (x86)\Windows Kits\10\lib\10.0.26100.0\um\x64\advapi32.lib:
+      Searching C:\Program Files (x86)\Windows Kits\10\lib\10.0.26100.0\um\x64\shell32.lib:
+      Searching C:\Program Files (x86)\Windows Kits\10\lib\10.0.26100.0\um\x64\comctl32.lib:
+      Searching C:\Program Files (x86)\Windows Kits\10\lib\10.0.26100.0\um\x64\uxtheme.lib:
+      Searching C:\Program Files (x86)\Windows Kits\10\lib\10.0.26100.0\um\x64\windowscodecs.lib:
+      Searching C:\Program Files (x86)\Windows Kits\10\lib\10.0.26100.0\um\x64\uuid.lib:
+      Searching C:\Program Files\Microsoft Visual Studio\2022\Community\VC\Tools\MSVC\14.44.35207\atlmfc\lib\x64\atls.lib:
+      Searching C:\Program Files (x86)\Windows Kits\10\lib\10.0.26100.0\um\x64\ole32.lib:
+      Searching C:\Program Files (x86)\Windows Kits\10\lib\10.0.26100.0\um\x64\oleaut32.lib:
+      Searching C:\Program Files (x86)\Windows Kits\10\lib\10.0.26100.0\um\x64\oledlg.lib:
+      Searching C:\Program Files (x86)\Windows Kits\10\lib\10.0.26100.0\um\x64\urlmon.lib:
+      Searching C:\Program Files (x86)\Windows Kits\10\lib\10.0.26100.0\um\x64\gdiplus.lib:
+      Searching C:\Program Files\Microsoft Visual Studio\2022\Community\VC\Tools\MSVC\14.44.35207\lib\x64\libcpmt.lib:
+      Searching C:\Program Files\Microsoft Visual Studio\2022\Community\VC\Tools\MSVC\14.44.35207\lib\x64\OLDNAMES.lib:
+      Searching C:\Program Files (x86)\Windows Kits\10\lib\10.0.26100.0\um\x64\bcrypt.lib:
+      Searching C:\Program Files (x86)\Windows Kits\10\lib\10.0.26100.0\um\x64\propsys.lib:
+      Searching C:\Program Files\Microsoft Visual Studio\2022\Community\VC\Tools\MSVC\14.44.35207\lib\x64\comsuppw.lib:
+      Searching C:\Program Files (x86)\Windows Kits\10\lib\10.0.26100.0\um\x64\ws2_32.lib:
+      Searching C:\Program Files (x86)\Windows Kits\10\lib\10.0.26100.0\um\x64\mswsock.lib:
+      Searching C:\Program Files (x86)\Windows Kits\10\lib\10.0.26100.0\um\x64\oleacc.lib:
+      Searching C:\Program Files (x86)\Windows Kits\10\lib\10.0.26100.0\um\x64\wininet.lib:
+      Searching C:\Program Files\Microsoft Visual Studio\2022\Community\VC\Tools\MSVC\14.44.35207\lib\x64\libvcruntime.lib:
+      Searching C:\Program Files (x86)\Windows Kits\10\lib\10.0.26100.0\ucrt\x64\libucrt.lib:
+  
+  Finished searching libraries
+  
+  Searching libraries
+      Searching C:\Program Files (x86)\Windows Kits\10\lib\10.0.26100.0\um\x64\version.lib:
+      Searching C:\Program Files (x86)\Windows Kits\10\lib\10.0.26100.0\um\x64\shlwapi.lib:
+      Searching C:\Program Files (x86)\Windows Kits\10\lib\10.0.26100.0\um\x64\imm32.lib:
+      Searching C:\Program Files (x86)\Windows Kits\10\lib\10.0.26100.0\um\x64\HtmlHelp.lib:
+      Searching C:\Program Files (x86)\Windows Kits\10\lib\10.0.26100.0\um\x64\iphlpapi.lib:
+      Searching C:\Program Files\Microsoft Visual Studio\2022\Community\VC\Tools\MSVC\14.44.35207\lib\x64\Delayimp.lib:
+      Searching C:\Program Files\Microsoft Visual Studio\2022\Community\VC\Tools\MSVC\14.44.35207\atlmfc\lib\x64\afxnmcd.lib:
+      Searching C:\Program Files\Microsoft Visual Studio\2022\Community\VC\Tools\MSVC\14.44.35207\atlmfc\lib\x64\uafxcw.lib:
+      Searching C:\Program Files\Microsoft Visual Studio\2022\Community\VC\Tools\MSVC\14.44.35207\lib\x64\libcmt.lib:
+      Searching C:\Program Files (x86)\Windows Kits\10\lib\10.0.26100.0\um\x64\kernel32.lib:
+      Searching C:\Program Files (x86)\Windows Kits\10\lib\10.0.26100.0\um\x64\user32.lib:
+      Searching C:\Program Files (x86)\Windows Kits\10\lib\10.0.26100.0\um\x64\gdi32.lib:
+      Searching C:\Program Files (x86)\Windows Kits\10\lib\10.0.26100.0\um\x64\msimg32.lib:
+      Searching C:\Program Files (x86)\Windows Kits\10\lib\10.0.26100.0\um\x64\comdlg32.lib:
+      Searching C:\Program Files (x86)\Windows Kits\10\lib\10.0.26100.0\um\x64\winspool.lib:
+      Searching C:\Program Files (x86)\Windows Kits\10\lib\10.0.26100.0\um\x64\advapi32.lib:
+      Searching C:\Program Files (x86)\Windows Kits\10\lib\10.0.26100.0\um\x64\shell32.lib:
+      Searching C:\Program Files (x86)\Windows Kits\10\lib\10.0.26100.0\um\x64\comctl32.lib:
+      Searching C:\Program Files (x86)\Windows Kits\10\lib\10.0.26100.0\um\x64\uxtheme.lib:
+      Searching C:\Program Files (x86)\Windows Kits\10\lib\10.0.26100.0\um\x64\windowscodecs.lib:
+      Searching C:\Program Files (x86)\Windows Kits\10\lib\10.0.26100.0\um\x64\uuid.lib:
+      Searching C:\Program Files\Microsoft Visual Studio\2022\Community\VC\Tools\MSVC\14.44.35207\atlmfc\lib\x64\atls.lib:
+      Searching C:\Program Files (x86)\Windows Kits\10\lib\10.0.26100.0\um\x64\ole32.lib:
+      Searching C:\Program Files (x86)\Windows Kits\10\lib\10.0.26100.0\um\x64\oleaut32.lib:
+      Searching C:\Program Files (x86)\Windows Kits\10\lib\10.0.26100.0\um\x64\oledlg.lib:
+      Searching C:\Program Files (x86)\Windows Kits\10\lib\10.0.26100.0\um\x64\urlmon.lib:
+      Searching C:\Program Files (x86)\Windows Kits\10\lib\10.0.26100.0\um\x64\gdiplus.lib:
+      Searching C:\Program Files\Microsoft Visual Studio\2022\Community\VC\Tools\MSVC\14.44.35207\lib\x64\libcpmt.lib:
+      Searching C:\Program Files\Microsoft Visual Studio\2022\Community\VC\Tools\MSVC\14.44.35207\lib\x64\OLDNAMES.lib:
+      Searching C:\Program Files (x86)\Windows Kits\10\lib\10.0.26100.0\um\x64\bcrypt.lib:
+      Searching C:\Program Files (x86)\Windows Kits\10\lib\10.0.26100.0\um\x64\propsys.lib:
+      Searching C:\Program Files\Microsoft Visual Studio\2022\Community\VC\Tools\MSVC\14.44.35207\lib\x64\comsuppw.lib:
+      Searching C:\Program Files (x86)\Windows Kits\10\lib\10.0.26100.0\um\x64\ws2_32.lib:
+      Searching C:\Program Files (x86)\Windows Kits\10\lib\10.0.26100.0\um\x64\mswsock.lib:
+      Searching C:\Program Files (x86)\Windows Kits\10\lib\10.0.26100.0\um\x64\oleacc.lib:
+      Searching C:\Program Files (x86)\Windows Kits\10\lib\10.0.26100.0\um\x64\wininet.lib:
+      Searching C:\Program Files\Microsoft Visual Studio\2022\Community\VC\Tools\MSVC\14.44.35207\lib\x64\libvcruntime.lib:
+      Searching C:\Program Files (x86)\Windows Kits\10\lib\10.0.26100.0\ucrt\x64\libucrt.lib:
+  
+  Finished searching libraries
+  
+  Searching libraries
+      Searching C:\Program Files (x86)\Windows Kits\10\lib\10.0.26100.0\um\x64\version.lib:
+      Searching C:\Program Files (x86)\Windows Kits\10\lib\10.0.26100.0\um\x64\shlwapi.lib:
+      Searching C:\Program Files (x86)\Windows Kits\10\lib\10.0.26100.0\um\x64\imm32.lib:
+      Searching C:\Program Files (x86)\Windows Kits\10\lib\10.0.26100.0\um\x64\HtmlHelp.lib:
+      Searching C:\Program Files (x86)\Windows Kits\10\lib\10.0.26100.0\um\x64\iphlpapi.lib:
+      Searching C:\Program Files\Microsoft Visual Studio\2022\Community\VC\Tools\MSVC\14.44.35207\lib\x64\Delayimp.lib:
+      Searching C:\Program Files\Microsoft Visual Studio\2022\Community\VC\Tools\MSVC\14.44.35207\atlmfc\lib\x64\afxnmcd.lib:
+      Searching C:\Program Files\Microsoft Visual Studio\2022\Community\VC\Tools\MSVC\14.44.35207\atlmfc\lib\x64\uafxcw.lib:
+      Searching C:\Program Files\Microsoft Visual Studio\2022\Community\VC\Tools\MSVC\14.44.35207\lib\x64\libcmt.lib:
+      Searching C:\Program Files (x86)\Windows Kits\10\lib\10.0.26100.0\um\x64\kernel32.lib:
+      Searching C:\Program Files (x86)\Windows Kits\10\lib\10.0.26100.0\um\x64\user32.lib:
+      Searching C:\Program Files (x86)\Windows Kits\10\lib\10.0.26100.0\um\x64\gdi32.lib:
+      Searching C:\Program Files (x86)\Windows Kits\10\lib\10.0.26100.0\um\x64\msimg32.lib:
+      Searching C:\Program Files (x86)\Windows Kits\10\lib\10.0.26100.0\um\x64\comdlg32.lib:
+      Searching C:\Program Files (x86)\Windows Kits\10\lib\10.0.26100.0\um\x64\winspool.lib:
+      Searching C:\Program Files (x86)\Windows Kits\10\lib\10.0.26100.0\um\x64\advapi32.lib:
+      Searching C:\Program Files (x86)\Windows Kits\10\lib\10.0.26100.0\um\x64\shell32.lib:
+      Searching C:\Program Files (x86)\Windows Kits\10\lib\10.0.26100.0\um\x64\comctl32.lib:
+      Searching C:\Program Files (x86)\Windows Kits\10\lib\10.0.26100.0\um\x64\uxtheme.lib:
+      Searching C:\Program Files (x86)\Windows Kits\10\lib\10.0.26100.0\um\x64\windowscodecs.lib:
+      Searching C:\Program Files (x86)\Windows Kits\10\lib\10.0.26100.0\um\x64\uuid.lib:
+      Searching C:\Program Files\Microsoft Visual Studio\2022\Community\VC\Tools\MSVC\14.44.35207\atlmfc\lib\x64\atls.lib:
+      Searching C:\Program Files (x86)\Windows Kits\10\lib\10.0.26100.0\um\x64\ole32.lib:
+      Searching C:\Program Files (x86)\Windows Kits\10\lib\10.0.26100.0\um\x64\oleaut32.lib:
+      Searching C:\Program Files (x86)\Windows Kits\10\lib\10.0.26100.0\um\x64\oledlg.lib:
+      Searching C:\Program Files (x86)\Windows Kits\10\lib\10.0.26100.0\um\x64\urlmon.lib:
+      Searching C:\Program Files (x86)\Windows Kits\10\lib\10.0.26100.0\um\x64\gdiplus.lib:
+      Searching C:\Program Files\Microsoft Visual Studio\2022\Community\VC\Tools\MSVC\14.44.35207\lib\x64\libcpmt.lib:
+      Searching C:\Program Files\Microsoft Visual Studio\2022\Community\VC\Tools\MSVC\14.44.35207\lib\x64\OLDNAMES.lib:
+      Searching C:\Program Files (x86)\Windows Kits\10\lib\10.0.26100.0\um\x64\bcrypt.lib:
+      Searching C:\Program Files (x86)\Windows Kits\10\lib\10.0.26100.0\um\x64\propsys.lib:
+      Searching C:\Program Files\Microsoft Visual Studio\2022\Community\VC\Tools\MSVC\14.44.35207\lib\x64\comsuppw.lib:
+      Searching C:\Program Files (x86)\Windows Kits\10\lib\10.0.26100.0\um\x64\ws2_32.lib:
+      Searching C:\Program Files (x86)\Windows Kits\10\lib\10.0.26100.0\um\x64\mswsock.lib:
+      Searching C:\Program Files (x86)\Windows Kits\10\lib\10.0.26100.0\um\x64\oleacc.lib:
+      Searching C:\Program Files (x86)\Windows Kits\10\lib\10.0.26100.0\um\x64\wininet.lib:
+      Searching C:\Program Files\Microsoft Visual Studio\2022\Community\VC\Tools\MSVC\14.44.35207\lib\x64\libvcruntime.lib:
+      Searching C:\Program Files (x86)\Windows Kits\10\lib\10.0.26100.0\ucrt\x64\libucrt.lib:
+  
+  Finished searching libraries
+  Merge.vcxproj -> F:\development\steam\emulator_bot\winmerge_sidebyside\Build\x64\Release\WinMergeU.exe

@@ -14,6 +14,7 @@
 #include "EditorFilepathBar.h"
 #include "DirSideBySideHeaderBar.h"
 #include "DirSideBySideFilterBar.h"
+#include "DirSxSToolBar.h"
 #include "BasicFlatStatusBar.h"
 #include "DirCompProgressBar.h"
 #include "DirFilterBar.h"
@@ -76,11 +77,13 @@ protected:
 	CEditorFilePathBar m_wndFilePathBar;
 	CDirSideBySideHeaderBar m_wndSxSHeaderBar;
 	CDirSideBySideFilterBar m_wndSxSFilterBar;
+	CDirSxSToolBar m_wndSxSToolBar;
 	std::unique_ptr<DirCompProgressBar> m_pCmpProgressBar;
 	std::unique_ptr<CDirFilterBar> m_pDirFilterBar;
 
 	// Side-by-side mode
 	bool m_bSideBySideMode;
+	bool m_bSplitterCreated;
 	CSplitterWndEx m_wndSplitter;
 	CDirPaneView *m_pLeftPaneView;
 	CDirPaneView *m_pRightPaneView;
@@ -110,11 +113,42 @@ protected:
 	afx_msg void OnSxsSessionLoad();
 	afx_msg void OnSxsWorkspaceSave();
 	afx_msg void OnSxsWorkspaceLoad();
+public:
 	afx_msg void OnSxsNavBack();
 	afx_msg void OnSxsNavForward();
+	afx_msg void OnSxsUpLevel();
+	afx_msg void OnUpdateSxsRange(CCmdUI* pCmdUI);
+	// Diffs dropdown presets
+	afx_msg void OnSxsDiffsShowDiffs();
+	afx_msg void OnSxsDiffsNoOrphans();
+	afx_msg void OnSxsDiffsNoOrphansDiff();
+	afx_msg void OnSxsDiffsOrphans();
+	afx_msg void OnSxsDiffsLeftNewer();
+	afx_msg void OnSxsDiffsRightNewer();
+	afx_msg void OnSxsDiffsLeftNewerOrphans();
+	afx_msg void OnSxsDiffsRightNewerOrphans();
+	afx_msg void OnSxsDiffsLeftOrphans();
+	afx_msg void OnSxsDiffsRightOrphans();
+	// Structure dropdown
+	afx_msg void OnSxsStructAlwaysFolders();
+	afx_msg void OnSxsStructFilesAndFolders();
+	afx_msg void OnSxsStructOnlyFiles();
+	afx_msg void OnSxsStructIgnoreStructure();
+	// Session settings dialog
+	afx_msg void OnSxsSessionSettings();
+	// Home button
+	afx_msg void OnSxsHome();
+	// Forward native WinMerge commands to SxS panes
+	afx_msg void OnFwdCopyLR();
+	afx_msg void OnFwdCopyRL();
+	afx_msg void OnFwdDelLeft();
+	afx_msg void OnFwdDelRight();
+	afx_msg void OnFwdDelBoth();
+	afx_msg void OnFwdRefresh();
+	afx_msg void OnFwdSelectAll();
+protected:
 	afx_msg void OnUpdateSxsNavBack(CCmdUI* pCmdUI);
 	afx_msg void OnUpdateSxsNavForward(CCmdUI* pCmdUI);
-	afx_msg void OnSxsUpLevel();
 	//}}AFX_MSG
 	DECLARE_MESSAGE_MAP()
 

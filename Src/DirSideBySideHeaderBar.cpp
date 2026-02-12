@@ -12,32 +12,70 @@
 
 #include "StdAfx.h"
 #include "DirSideBySideHeaderBar.h"
-#include "RoundedRectWithShadow.h"
-#include "cecolor.h"
 #include "DarkModeLib.h"
 #include "paths.h"
+#include "resource.h"
+#include <uxtheme.h>
+#pragma comment(lib, "uxtheme.lib")
 
 #ifdef _DEBUG
 #define new DEBUG_NEW
 #endif
 
-constexpr int SXS_RR_RADIUS = 3;
-constexpr int SXS_RR_PADDING = 3;
-constexpr int SXS_RR_SHADOWWIDTH = 3;
+// Beyond Compare dark theme colors
+namespace BcHdr
+{
+	static const COLORREF BG        = RGB(43, 43, 43);   // toolbar background
+	static const COLORREF COMBO_BG  = RGB(30, 30, 30);   // combo edit background
+	static const COLORREF TEXT      = RGB(200, 200, 200); // text
+	static const COLORREF BTN_BG   = RGB(50, 50, 50);    // button face
+	static const COLORREF BTN_HOT  = RGB(65, 65, 65);    // button hover
+	static const COLORREF BTN_PRESS= RGB(35, 35, 35);    // button pressed
+	static const COLORREF BTN_BORDER = RGB(65, 65, 65);  // button border
+	static const COLORREF ICON     = RGB(170, 170, 170);  // icon lines
+}
+
+// Icon type constants for DrawIconButton
+enum { ICON_BACK = 0, ICON_BROWSE = 1, ICON_UPLEVEL = 2 };
+
+// Control IDs
+#define IDC_SXS_COMBO_LEFT     9801
+#define IDC_SXS_COMBO_RIGHT    9802
+#define IDC_SXS_BACK_LEFT      9803
+#define IDC_SXS_BACK_RIGHT     9804
+#define IDC_SXS_BROWSE_LEFT    9805
+#define IDC_SXS_BROWSE_RIGHT   9806
+#define IDC_SXS_UPLEVEL_LEFT   9807
+#define IDC_SXS_UPLEVEL_RIGHT  9808
+
+// Bar height
+static const int BAR_HEIGHT = 24;
+// Button width
+static const int BTN_W = 22;
+// Vertical padding around combo
+static const int PAD_Y = 2;
 
 BEGIN_MESSAGE_MAP(CDirSideBySideHeaderBar, CDialogBar)
-	ON_NOTIFY_EX(TTN_NEEDTEXT, 0, OnToolTipNotify)
-	ON_CONTROL_RANGE(EN_SETFOCUS, IDC_STATIC_TITLE_PANE0, IDC_STATIC_TITLE_PANE2, OnSetFocusEdit)
-	ON_CONTROL_RANGE(EN_KILLFOCUS, IDC_STATIC_TITLE_PANE0, IDC_STATIC_TITLE_PANE2, OnKillFocusEdit)
-	ON_CONTROL_RANGE(EN_USER_CAPTION_CHANGED, IDC_STATIC_TITLE_PANE0, IDC_STATIC_TITLE_PANE2, OnChangeEdit)
-	ON_CONTROL_RANGE(EN_USER_FILE_SELECTED, IDC_STATIC_TITLE_PANE0, IDC_STATIC_TITLE_PANE2, OnSelectEdit)
+	ON_WM_ERASEBKGND()
+	ON_WM_CTLCOLOR()
+	ON_WM_DRAWITEM()
+	ON_CONTROL_RANGE(CBN_SELCHANGE, IDC_SXS_COMBO_LEFT, IDC_SXS_COMBO_RIGHT, OnComboSelChange)
+	ON_BN_CLICKED(IDC_SXS_BACK_LEFT, OnBackLeft)
+	ON_BN_CLICKED(IDC_SXS_BACK_RIGHT, OnBackRight)
+	ON_BN_CLICKED(IDC_SXS_BROWSE_LEFT, OnBrowseLeft)
+	ON_BN_CLICKED(IDC_SXS_BROWSE_RIGHT, OnBrowseRight)
+	ON_BN_CLICKED(IDC_SXS_UPLEVEL_LEFT, OnUpLevelLeft)
+	ON_BN_CLICKED(IDC_SXS_UPLEVEL_RIGHT, OnUpLevelRight)
 END_MESSAGE_MAP()
 
 CDirSideBySideHeaderBar::CDirSideBySideHeaderBar()
 	: m_nPanes(2)
+	, m_nActivePane(-1)
 {
 	m_pDropHandlers[0] = nullptr;
 	m_pDropHandlers[1] = nullptr;
+	m_brDarkBg.CreateSolidBrush(BcHdr::BG);
+	m_brDarkEdit.CreateSolidBrush(BcHdr::COMBO_BG);
 }
 
 CDirSideBySideHeaderBar::~CDirSideBySideHeaderBar()
@@ -46,7 +84,8 @@ CDirSideBySideHeaderBar::~CDirSideBySideHeaderBar()
 	{
 		if (m_pDropHandlers[pane])
 		{
-			RevokeDragDrop(m_Edit[pane].m_hWnd);
+			if (m_comboPath[pane].GetSafeHwnd())
+				RevokeDragDrop(m_comboPath[pane].m_hWnd);
 			m_pDropHandlers[pane]->Release();
 			m_pDropHandlers[pane] = nullptr;
 		}
@@ -54,42 +93,156 @@ CDirSideBySideHeaderBar::~CDirSideBySideHeaderBar()
 }
 
 /**
- * @brief Create the header bar.
- * Reuses IDD_EDITOR_HEADERBAR template which has 3 edit controls.
- * We only use pane 0 and 1 for left/right.
+ * @brief Draw a small icon inside an owner-draw button.
+ * @param iconType  ICON_BACK, ICON_BROWSE, or ICON_UPLEVEL
  */
+void CDirSideBySideHeaderBar::DrawIconButton(LPDRAWITEMSTRUCT lpDIS, int iconType)
+{
+	HDC hDC = lpDIS->hDC;
+	RECT rc = lpDIS->rcItem;
+	bool bPressed = (lpDIS->itemState & ODS_SELECTED) != 0;
+
+	// Background
+	COLORREF bg = bPressed ? BcHdr::BTN_PRESS : BcHdr::BTN_BG;
+	HBRUSH hBr = CreateSolidBrush(bg);
+	FillRect(hDC, &rc, hBr);
+	DeleteObject(hBr);
+
+	// Border
+	HPEN hPen = CreatePen(PS_SOLID, 1, BcHdr::BTN_BORDER);
+	HPEN hOld = (HPEN)SelectObject(hDC, hPen);
+	HBRUSH hNull = (HBRUSH)GetStockObject(NULL_BRUSH);
+	HBRUSH hOldBr = (HBRUSH)SelectObject(hDC, hNull);
+	Rectangle(hDC, rc.left, rc.top, rc.right, rc.bottom);
+	SelectObject(hDC, hOld);
+	SelectObject(hDC, hOldBr);
+	DeleteObject(hPen);
+
+	// Draw icon using GDI
+	int cx = rc.right - rc.left;
+	int cy = rc.bottom - rc.top;
+	int mx = rc.left + cx / 2;
+	int my = rc.top + cy / 2;
+
+	HPEN hIconPen = CreatePen(PS_SOLID, 2, BcHdr::ICON);
+	SelectObject(hDC, hIconPen);
+
+	switch (iconType)
+	{
+	case ICON_BACK:
+		// Left-pointing arrow: < shape
+		{
+			int sz = 4;
+			MoveToEx(hDC, mx + sz, my - sz, nullptr);
+			LineTo(hDC, mx - sz + 1, my);
+			MoveToEx(hDC, mx - sz + 1, my, nullptr);
+			LineTo(hDC, mx + sz, my + sz);
+		}
+		break;
+
+	case ICON_BROWSE:
+		// Folder icon: simple folder outline
+		{
+			HPEN hFolderPen = CreatePen(PS_SOLID, 1, BcHdr::ICON);
+			HPEN hPrev = (HPEN)SelectObject(hDC, hFolderPen);
+			HBRUSH hFolderBr = CreateSolidBrush(RGB(180, 160, 80));
+			HBRUSH hPrevBr = (HBRUSH)SelectObject(hDC, hFolderBr);
+			// Folder body
+			RECT rcFolder = { mx - 6, my - 2, mx + 6, my + 5 };
+			Rectangle(hDC, rcFolder.left, rcFolder.top, rcFolder.right, rcFolder.bottom);
+			// Tab
+			RECT rcTab = { mx - 6, my - 5, mx - 1, my - 1 };
+			Rectangle(hDC, rcTab.left, rcTab.top, rcTab.right, rcTab.bottom);
+			SelectObject(hDC, hPrev);
+			SelectObject(hDC, hPrevBr);
+			DeleteObject(hFolderPen);
+			DeleteObject(hFolderBr);
+		}
+		break;
+
+	case ICON_UPLEVEL:
+		// Up arrow: ^ shape with stem
+		{
+			int sz = 4;
+			// Arrow head
+			MoveToEx(hDC, mx - sz, my + 1, nullptr);
+			LineTo(hDC, mx, my - sz + 1);
+			MoveToEx(hDC, mx, my - sz + 1, nullptr);
+			LineTo(hDC, mx + sz, my + 1);
+			// Stem
+			MoveToEx(hDC, mx, my - sz + 2, nullptr);
+			LineTo(hDC, mx, my + sz);
+		}
+		break;
+	}
+
+	SelectObject(hDC, GetStockObject(BLACK_PEN));
+	DeleteObject(hIconPen);
+}
+
 BOOL CDirSideBySideHeaderBar::Create(CWnd* pParentWnd)
 {
 	if (!__super::Create(pParentWnd, CDirSideBySideHeaderBar::IDD,
 		CBRS_ALIGN_TOP | CBRS_TOOLTIPS | CBRS_FLYBY, AFX_IDW_CONTROLBAR_FIRST + 28))
 		return FALSE;
 
-	NONCLIENTMETRICS ncm = { sizeof NONCLIENTMETRICS };
-	if (SystemParametersInfo(SPI_GETNONCLIENTMETRICS, sizeof NONCLIENTMETRICS, &ncm, 0))
+	// Hide the template CFilepathEdit controls — we create our own combos
+	for (UINT id = IDC_STATIC_TITLE_PANE0; id <= IDC_STATIC_TITLE_PANE2; id++)
 	{
-		ncm.lfStatusFont.lfWeight = FW_BOLD;
-		m_font.CreateFontIndirect(&ncm.lfStatusFont);
+		CWnd* pCtl = GetDlgItem(id);
+		if (pCtl)
+			pCtl->ShowWindow(SW_HIDE);
 	}
 
-	// Subclass the two path edit controls (left=pane0, right=pane1)
+	// Font for combo text
+	NONCLIENTMETRICS ncm = { sizeof NONCLIENTMETRICS };
+	SystemParametersInfo(SPI_GETNONCLIENTMETRICS, sizeof NONCLIENTMETRICS, &ncm, 0);
+	m_font.CreateFontIndirect(&ncm.lfStatusFont);
+
+	// Bold/larger font for button symbols (not used for drawing but kept for sizing)
+	ncm.lfStatusFont.lfWeight = FW_BOLD;
+	m_btnFont.CreateFontIndirect(&ncm.lfStatusFont);
+
+	// Create combo boxes and buttons for each pane
+	UINT comboIDs[2] = { IDC_SXS_COMBO_LEFT, IDC_SXS_COMBO_RIGHT };
+	UINT backIDs[2]  = { IDC_SXS_BACK_LEFT,  IDC_SXS_BACK_RIGHT };
+	UINT browseIDs[2] = { IDC_SXS_BROWSE_LEFT, IDC_SXS_BROWSE_RIGHT };
+	UINT upIDs[2]    = { IDC_SXS_UPLEVEL_LEFT, IDC_SXS_UPLEVEL_RIGHT };
+
 	for (int pane = 0; pane < 2; pane++)
 	{
-		m_Edit[pane].SubClassEdit(IDC_STATIC_TITLE_PANE0 + pane, this);
-		m_Edit[pane].SetFont(&m_font);
-		m_Edit[pane].SetMargins(0, std::abs(ncm.lfStatusFont.lfHeight));
+		// Combo box (CBS_DROPDOWN gives edit + dropdown button)
+		m_comboPath[pane].Create(
+			WS_CHILD | WS_VISIBLE | CBS_DROPDOWN | CBS_AUTOHSCROLL | WS_VSCROLL,
+			CRect(0, 0, 200, BAR_HEIGHT + 200), this, comboIDs[pane]);
+		m_comboPath[pane].SetFont(&m_font);
+		SetWindowTheme(m_comboPath[pane].m_hWnd, L"", L"");
+
+		// Back button (owner-drawn)
+		m_btnBack[pane].Create(_T(""),
+			WS_CHILD | WS_VISIBLE | BS_PUSHBUTTON | BS_OWNERDRAW,
+			CRect(0, 0, BTN_W, BAR_HEIGHT), this, backIDs[pane]);
+		SetWindowTheme(m_btnBack[pane].m_hWnd, L"", L"");
+
+		// Browse button (owner-drawn)
+		m_btnBrowse[pane].Create(_T(""),
+			WS_CHILD | WS_VISIBLE | BS_PUSHBUTTON | BS_OWNERDRAW,
+			CRect(0, 0, BTN_W, BAR_HEIGHT), this, browseIDs[pane]);
+		SetWindowTheme(m_btnBrowse[pane].m_hWnd, L"", L"");
+
+		// Up-level button (owner-drawn)
+		m_btnUpLevel[pane].Create(_T(""),
+			WS_CHILD | WS_VISIBLE | BS_PUSHBUTTON | BS_OWNERDRAW,
+			CRect(0, 0, BTN_W, BAR_HEIGHT), this, upIDs[pane]);
+		SetWindowTheme(m_btnUpLevel[pane].m_hWnd, L"", L"");
 	}
 
-	// Hide the third pane edit (pane2) since SxS mode is always 2-pane
-	CWnd* pPane2 = GetDlgItem(IDC_STATIC_TITLE_PANE2);
-	if (pPane2)
-		pPane2->ShowWindow(SW_HIDE);
-
-	// Register drop targets on each path edit control
+	// Register drop targets on each combo's edit area
 	for (int pane = 0; pane < 2; pane++)
 	{
 		m_pDropHandlers[pane] = new DropHandler(
 			[this, pane](const std::vector<String>& files) { OnDropFiles(pane, files); });
-		RegisterDragDrop(m_Edit[pane].m_hWnd, m_pDropHandlers[pane]);
+		RegisterDragDrop(m_comboPath[pane].m_hWnd, m_pDropHandlers[pane]);
 	}
 
 	return TRUE;
@@ -97,262 +250,242 @@ BOOL CDirSideBySideHeaderBar::Create(CWnd* pParentWnd)
 
 CSize CDirSideBySideHeaderBar::CalcFixedLayout(BOOL bStretch, BOOL bHorz)
 {
-	TEXTMETRIC tm;
-	CClientDC dc(this);
-	CFont *pOldFont = dc.SelectObject(&m_font);
-	dc.GetTextMetrics(&tm);
-	dc.SelectObject(pOldFont);
-	const int lpx = dc.GetDeviceCaps(LOGPIXELSX);
-	auto pointToPixel = [lpx](int point) { return MulDiv(point, lpx, 72); };
-	int cy = pointToPixel(3 + SXS_RR_SHADOWWIDTH + SXS_RR_PADDING);
-	return CSize(SHRT_MAX, 1 + tm.tmHeight + cy);
+	return CSize(SHRT_MAX, BAR_HEIGHT + 2 * PAD_Y);
+}
+
+BOOL CDirSideBySideHeaderBar::OnEraseBkgnd(CDC* pDC)
+{
+	CRect rc;
+	GetClientRect(&rc);
+	pDC->FillSolidRect(&rc, BcHdr::BG);
+	return TRUE;
+}
+
+HBRUSH CDirSideBySideHeaderBar::OnCtlColor(CDC* pDC, CWnd* pWnd, UINT nCtlColor)
+{
+	// Dark theme for the combo's edit child
+	if (nCtlColor == CTLCOLOR_EDIT)
+	{
+		for (int pane = 0; pane < m_nPanes; pane++)
+		{
+			CWnd* pParent = pWnd->GetParent();
+			if (pParent && pParent->GetSafeHwnd() == m_comboPath[pane].GetSafeHwnd())
+			{
+				pDC->SetBkColor(BcHdr::COMBO_BG);
+				pDC->SetTextColor(BcHdr::TEXT);
+				return (HBRUSH)m_brDarkEdit.GetSafeHandle();
+			}
+		}
+	}
+	// Dark theme for the dropdown list
+	if (nCtlColor == CTLCOLOR_LISTBOX)
+	{
+		pDC->SetBkColor(BcHdr::COMBO_BG);
+		pDC->SetTextColor(BcHdr::TEXT);
+		return (HBRUSH)m_brDarkEdit.GetSafeHandle();
+	}
+	return __super::OnCtlColor(pDC, pWnd, nCtlColor);
+}
+
+void CDirSideBySideHeaderBar::OnDrawItem(int nIDCtl, LPDRAWITEMSTRUCT lpDIS)
+{
+	switch (nIDCtl)
+	{
+	case IDC_SXS_BACK_LEFT:
+	case IDC_SXS_BACK_RIGHT:
+		DrawIconButton(lpDIS, ICON_BACK);
+		return;
+	case IDC_SXS_BROWSE_LEFT:
+	case IDC_SXS_BROWSE_RIGHT:
+		DrawIconButton(lpDIS, ICON_BROWSE);
+		return;
+	case IDC_SXS_UPLEVEL_LEFT:
+	case IDC_SXS_UPLEVEL_RIGHT:
+		DrawIconButton(lpDIS, ICON_UPLEVEL);
+		return;
+	}
+	__super::OnDrawItem(nIDCtl, lpDIS);
 }
 
 /**
- * @brief Resize both edit controls to equal widths.
- * Called when no explicit widths are available.
+ * @brief Resize with no explicit widths — split evenly.
  */
 void CDirSideBySideHeaderBar::Resize()
 {
 	if (m_hWnd == nullptr)
 		return;
+	CRect rc;
+	GetClientRect(&rc);
+	int half = rc.Width() / 2;
+	int widths[2] = { half, rc.Width() - half };
+	int offsets[2] = { 0, half };
+	Resize(widths, offsets);
+}
 
-	WINDOWPLACEMENT infoBar = {};
-	GetWindowPlacement(&infoBar);
-
-	int widths[2] = {};
-	for (int pane = 0; pane < m_nPanes; pane++)
-		widths[pane] = (infoBar.rcNormalPosition.right / m_nPanes) - ((pane == 0) ? 7 : 5);
-	Resize(widths);
+void CDirSideBySideHeaderBar::Resize(int widths[])
+{
+	int offsets[2] = { 0, widths[0] };
+	Resize(widths, offsets);
 }
 
 /**
- * @brief Resize edit controls to match splitter column widths.
- * @param [in] widths Array of column widths from the splitter.
+ * @brief Layout controls to match splitter column positions.
+ *
+ * Per-pane layout: [ComboBox][Back btn][Browse btn][Up btn]
+ * The combo takes all available width minus 3*BTN_W for buttons.
  */
-void CDirSideBySideHeaderBar::Resize(int widths[])
+void CDirSideBySideHeaderBar::Resize(int widths[], int offsets[])
 {
 	if (m_hWnd == nullptr)
 		return;
 
-	CRect rc;
-	int x = 0;
-	GetClientRect(&rc);
-	bool resized = false;
+	const int comboH = BAR_HEIGHT;
+	const int btnCount = 3;
+	const int buttonsW = btnCount * BTN_W;
+
 	for (int pane = 0; pane < m_nPanes; pane++)
 	{
-		CRect rcOld;
-		m_Edit[pane].GetClientRect(&rcOld);
-		rc.left = x;
-		rc.right = x + widths[pane] + (pane == 0 ? 5 : 7);
-		x = rc.right;
-		if (rcOld.Width() != rc.Width())
-		{
-			CClientDC dc(this);
-			const int lpx = dc.GetDeviceCaps(LOGPIXELSX);
-			auto pointToPixel = [lpx](int point) { return MulDiv(point, lpx, 72); };
-			const int sw = pointToPixel(SXS_RR_SHADOWWIDTH);
-			CRect rc2 = rc;
-			rc2.DeflateRect(sw + sw, sw);
-			m_Edit[pane].MoveWindow(&rc2);
-			m_Edit[pane].RefreshDisplayText();
-			resized = true;
-		}
+		int x = offsets[pane];
+		int w = widths[pane];
+		int comboW = w - buttonsW - 1;
+		if (comboW < 80) comboW = 80;
+
+		if (m_comboPath[pane].GetSafeHwnd())
+			m_comboPath[pane].SetWindowPos(nullptr, x, PAD_Y, comboW, comboH + 200,
+				SWP_NOZORDER | SWP_NOACTIVATE);
+
+		int bx = x + comboW + 1;
+		if (m_btnBack[pane].GetSafeHwnd())
+			m_btnBack[pane].SetWindowPos(nullptr, bx, PAD_Y, BTN_W, comboH,
+				SWP_NOZORDER | SWP_NOACTIVATE);
+		bx += BTN_W;
+		if (m_btnBrowse[pane].GetSafeHwnd())
+			m_btnBrowse[pane].SetWindowPos(nullptr, bx, PAD_Y, BTN_W, comboH,
+				SWP_NOZORDER | SWP_NOACTIVATE);
+		bx += BTN_W;
+		if (m_btnUpLevel[pane].GetSafeHwnd())
+			m_btnUpLevel[pane].SetWindowPos(nullptr, bx, PAD_Y, BTN_W, comboH,
+				SWP_NOZORDER | SWP_NOACTIVATE);
 	}
-	if (resized)
-		InvalidateRect(nullptr, false);
+
+	InvalidateRect(nullptr, FALSE);
 }
 
-void CDirSideBySideHeaderBar::DoPaint(CDC* pDC)
-{
-	const int lpx = pDC->GetDeviceCaps(LOGPIXELSX);
-	auto pointToPixel = [lpx](int point) { return MulDiv(point, lpx, 72); };
-	const int r = pointToPixel(SXS_RR_RADIUS);
-	const int sw = pointToPixel(SXS_RR_SHADOWWIDTH);
-	CRect rcBar;
-	GetWindowRect(&rcBar);
-	const COLORREF clrBarBackcolor = GetSysColor(COLOR_3DFACE);
-	for (int pane = 0; pane < m_nPanes; pane++)
-	{
-		CRect rc;
-		m_Edit[pane].GetWindowRect(&rc);
-		const COLORREF clrBackcolor = m_Edit[pane].GetBackColor();
-		const COLORREF clrShadow =
-			CEColor::GetIntermediateColor(clrBarBackcolor, GetSysColor(COLOR_3DSHADOW), m_Edit[pane].GetActive() ? 0.5f : 0.8f);
-		rc.OffsetRect(-rcBar.left, -rcBar.top);
-		DrawRoundedRectWithShadow(pDC->m_hDC, rc.left - sw, rc.top, rc.right - rc.left + 2 * sw, rc.bottom - rc.top, r, sw,
-			clrBackcolor, clrShadow, clrBarBackcolor);
-		if (pane == m_nPanes - 1)
-		{
-			CRect rc2{ rc.right + sw + sw, 0, rcBar.Width(), rcBar.Height() };
-			pDC->FillSolidRect(&rc2, clrBarBackcolor);
-		}
-	}
-	__super::DoPaint(pDC);
-}
-
-BOOL CDirSideBySideHeaderBar::OnToolTipNotify(UINT id, NMHDR * pTTTStruct, LRESULT * pResult)
-{
-	if (m_hWnd == nullptr)
-		return FALSE;
-
-	TOOLTIPTEXT *pTTT = (TOOLTIPTEXT *)pTTTStruct;
-	if (pTTT->uFlags & TTF_IDISHWND)
-	{
-		int nID = ::GetDlgCtrlID((HWND)pTTTStruct->idFrom);
-		if (nID == IDC_STATIC_TITLE_PANE0 || nID == IDC_STATIC_TITLE_PANE1)
-		{
-			CRect rect;
-			GetWindowRect(rect);
-			int maxWidth = (int)(rect.Width() * .97);
-			CRect rectScreen;
-			SystemParametersInfo(SPI_GETWORKAREA, 0, rectScreen, 0);
-			if (rectScreen.Width() * .8 > maxWidth)
-				maxWidth = (int)(rectScreen.Width() * .8);
-
-			HANDLE hFont = (HANDLE)::SendMessage(pTTTStruct->hwndFrom, WM_GETFONT, 0, 0);
-			CClientDC tempDC(this);
-			HANDLE hOldFont = ::SelectObject(tempDC.GetSafeHdc(), hFont);
-
-			CFilepathEdit * pItem = static_cast<CFilepathEdit*>(GetDlgItem(nID));
-			pTTT->lpszText = const_cast<tchar_t *>(pItem->GetUpdatedTipText(&tempDC, maxWidth).c_str());
-
-			if (hOldFont != nullptr)
-				::SelectObject(tempDC.GetSafeHdc(), hOldFont);
-
-			::SendMessage(pTTTStruct->hwndFrom, TTM_SETMAXTIPWIDTH, 0, 5000);
-			SetToolTipsFirstTime(pTTTStruct->hwndFrom);
-			return TRUE;
-		}
-	}
-	return FALSE;
-}
-
-void CDirSideBySideHeaderBar::OnSetFocusEdit(UINT id)
-{
-	const int pane = id - IDC_STATIC_TITLE_PANE0;
-	if (pane < 0 || pane >= m_nPanes)
-		return;
-	InvalidateRect(nullptr, false);
-	if (m_setFocusCallbackfunc)
-		m_setFocusCallbackfunc(pane);
-}
-
-void CDirSideBySideHeaderBar::OnKillFocusEdit(UINT id)
-{
-	InvalidateRect(nullptr, false);
-}
-
-void CDirSideBySideHeaderBar::OnChangeEdit(UINT id)
-{
-	const int pane = id - IDC_STATIC_TITLE_PANE0;
-	if (pane < 0 || pane >= m_nPanes)
-		return;
-	InvalidateRect(nullptr, false);
-	if (m_captionChangedCallbackfunc)
-	{
-		CString text;
-		m_Edit[pane].GetWindowText(text);
-		m_captionChangedCallbackfunc(pane, (const tchar_t*)text);
-	}
-}
-
-void CDirSideBySideHeaderBar::OnSelectEdit(UINT id)
-{
-	const int pane = id - IDC_STATIC_TITLE_PANE0;
-	if (pane < 0 || pane >= m_nPanes)
-		return;
-	InvalidateRect(nullptr, false);
-	(m_fileSelectedCallbackfunc ? m_fileSelectedCallbackfunc : m_folderSelectedCallbackfunc)
-		(pane, m_Edit[pane].GetSelectedPath());
-}
+// --- IHeaderBar implementation ---
 
 String CDirSideBySideHeaderBar::GetCaption(int pane) const
 {
 	ASSERT(pane >= 0 && pane < 2);
-	if (m_hWnd == nullptr)
+	if (m_hWnd == nullptr || !m_comboPath[pane].GetSafeHwnd())
 		return _T("");
-
 	CString str;
-	m_Edit[pane].GetWindowText(str);
+	m_comboPath[pane].GetWindowText(str);
 	return String(str);
 }
 
-void CDirSideBySideHeaderBar::SetCaption(int pane, const String& sString)
+void CDirSideBySideHeaderBar::SetCaption(int pane, const String& sCaption)
 {
 	ASSERT(pane >= 0 && pane < 2);
-	if (m_hWnd == nullptr)
+	if (m_hWnd == nullptr || !m_comboPath[pane].GetSafeHwnd())
 		return;
-
-	m_Edit[pane].SetOriginalText(sString);
+	m_comboPath[pane].SetWindowText(sCaption.c_str());
+	AddPathToHistory(pane, sCaption);
 }
 
 String CDirSideBySideHeaderBar::GetPath(int pane) const
 {
-	ASSERT(pane >= 0 && pane < 2);
-	if (m_hWnd == nullptr)
-		return _T("");
-
-	return m_Edit[pane].GetPath();
+	return GetCaption(pane);
 }
 
-void CDirSideBySideHeaderBar::SetPath(int pane, const String& sString)
+void CDirSideBySideHeaderBar::SetPath(int pane, const String& sPath)
 {
-	ASSERT(pane >= 0 && pane < 2);
-	if (m_hWnd == nullptr)
-		return;
-
-	m_Edit[pane].SetPath(sString);
+	SetCaption(pane, sPath);
 }
 
 int CDirSideBySideHeaderBar::GetActive() const
 {
-	for (int pane = 0; pane < m_nPanes; pane++)
-	{
-		if (m_Edit[pane].GetActive())
-			return pane;
-	}
-	return -1;
+	return m_nActivePane;
 }
 
 void CDirSideBySideHeaderBar::SetActive(int pane, bool bActive)
 {
-	ASSERT(pane >= 0 && pane < 2);
-	if (m_hWnd == nullptr)
-		return;
-
-	if (bActive != m_Edit[pane].GetActive())
-		InvalidateRect(nullptr, false);
-	m_Edit[pane].SetActive(bActive);
-}
-
-void CDirSideBySideHeaderBar::SetToolTipsFirstTime(HWND hTip)
-{
-	if (m_Tips.find(hTip) == m_Tips.end())
+	if (pane >= 0 && pane < 2)
 	{
-		m_Tips.insert(hTip);
-		DarkMode::setDarkTooltips(hTip, static_cast<int>(DarkMode::ToolTipsType::tooltip));
+		if (bActive)
+			m_nActivePane = pane;
+		else if (m_nActivePane == pane)
+			m_nActivePane = -1;
 	}
 }
 
 void CDirSideBySideHeaderBar::EditActivePanePath()
 {
-	const int pane = GetActive();
-	if (pane >= 0)
-		m_Edit[pane].PostMessage(WM_COMMAND, ID_EDITOR_EDIT_PATH, 0);
+	if (m_nActivePane >= 0 && m_nActivePane < 2)
+		m_comboPath[m_nActivePane].SetFocus();
 }
 
-/**
- * @brief Handle dropped files on a pane's path edit.
- * If a folder is dropped, treat it as the new path for that pane's side
- * by invoking the folder-selected callback.
- */
+// --- Combo selection ---
+
+void CDirSideBySideHeaderBar::OnComboSelChange(UINT id)
+{
+	int pane = (id == IDC_SXS_COMBO_LEFT) ? 0 : 1;
+	int sel = m_comboPath[pane].GetCurSel();
+	if (sel >= 0 && sel < static_cast<int>(m_pathHistory[pane].size()))
+	{
+		String selectedPath = m_pathHistory[pane][sel];
+		if (m_folderSelectedCallbackfunc)
+			m_folderSelectedCallbackfunc(pane, selectedPath);
+	}
+}
+
+// --- Button handlers ---
+
+void CDirSideBySideHeaderBar::OnBackLeft()   { if (m_backCallbackfunc)    m_backCallbackfunc(0); }
+void CDirSideBySideHeaderBar::OnBackRight()  { if (m_backCallbackfunc)    m_backCallbackfunc(1); }
+void CDirSideBySideHeaderBar::OnBrowseLeft() { if (m_browseCallbackfunc)  m_browseCallbackfunc(0); }
+void CDirSideBySideHeaderBar::OnBrowseRight(){ if (m_browseCallbackfunc)  m_browseCallbackfunc(1); }
+void CDirSideBySideHeaderBar::OnUpLevelLeft()  { if (m_upLevelCallbackfunc) m_upLevelCallbackfunc(0); }
+void CDirSideBySideHeaderBar::OnUpLevelRight() { if (m_upLevelCallbackfunc) m_upLevelCallbackfunc(1); }
+
+// --- Path history ---
+
+void CDirSideBySideHeaderBar::AddPathToHistory(int pane, const String& sPath)
+{
+	if (pane < 0 || pane >= 2 || sPath.empty())
+		return;
+
+	auto& history = m_pathHistory[pane];
+
+	// Remove existing duplicate (case-insensitive)
+	for (auto it = history.begin(); it != history.end(); ++it)
+	{
+		if (_tcsicmp(it->c_str(), sPath.c_str()) == 0)
+		{
+			history.erase(it);
+			break;
+		}
+	}
+
+	history.insert(history.begin(), sPath);
+	if (history.size() > 20)
+		history.resize(20);
+
+	// Update dropdown list
+	if (m_comboPath[pane].GetSafeHwnd())
+	{
+		m_comboPath[pane].ResetContent();
+		for (const auto& path : history)
+			m_comboPath[pane].AddString(path.c_str());
+	}
+}
+
+// --- Drop handler ---
+
 void CDirSideBySideHeaderBar::OnDropFiles(int pane, const std::vector<String>& files)
 {
 	if (files.empty() || pane < 0 || pane >= m_nPanes)
 		return;
 
-	// Use the first dropped path (folder or file's parent folder)
 	String path = files[0];
 	if (paths::DoesPathExist(path) == paths::IS_EXISTING_FILE)
 		path = paths::GetParentPath(path);

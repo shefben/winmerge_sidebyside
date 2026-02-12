@@ -178,10 +178,53 @@ int FolderCmp::prepAndCompareFiles(DIFFITEM &di)
 				goto exitPrepAndCompare;
 		}
 
-		// If options are binary equivalent, we could check for filesize
-		// difference here, and bail out if files are clearly different
-		// But, then we don't know if file is ascii or binary, and this
-		// affects behavior (also, we don't have an icon for unknown type)
+		// Early exit for unique (single-side) files:
+		// Encoding has been detected above, but there's no point opening files
+		// and running a full comparison when the result will always be DIFF.
+		if (!di.diffcode.existAll())
+		{
+			code = DIFFCODE::FILE | DIFFCODE::DIFF;
+			m_ndiffs = CDiffContext::DIFFS_UNKNOWN;
+			m_ntrivialdiffs = CDiffContext::DIFFS_UNKNOWN;
+			goto exitPrepAndCompare;
+		}
+
+		// Metadata quick-check: if timestamps AND sizes match on all sides,
+		// assume files are identical without reading content.
+		// This is the single biggest performance optimization for large folder
+		// comparisons. Beyond Compare uses this approach by default.
+		if (m_pCtxt->m_bTrustFileMetadata)
+		{
+			bool allMetadataMatch = true;
+			for (int idx = 1; idx < nDirs; idx++)
+			{
+				if (di.diffFileInfo[0].mtime != di.diffFileInfo[idx].mtime ||
+					di.diffFileInfo[0].size != di.diffFileInfo[idx].size)
+				{
+					allMetadataMatch = false;
+					break;
+				}
+			}
+			if (allMetadataMatch &&
+				di.diffFileInfo[0].size != DirItem::FILE_SIZE_NONE)
+			{
+				code = DIFFCODE::FILE | DIFFCODE::SAME;
+				m_ndiffs = 0;
+				m_ntrivialdiffs = 0;
+				goto exitPrepAndCompare;
+			}
+		}
+
+		// If either file is larger than limit compare files by quick contents
+		// This allows us to (faster) compare big binary files
+		// Check BEFORE opening files so we don't waste I/O on the wrong engine
+		if (nCompMethod == CMP_CONTENT &&
+			(di.diffFileInfo[0].size > m_pCtxt->m_nQuickCompareLimit ||
+			di.diffFileInfo[1].size > m_pCtxt->m_nQuickCompareLimit ||
+			(nDirs > 2 && di.diffFileInfo[2].size > m_pCtxt->m_nQuickCompareLimit)))
+		{
+			nCompMethod = CMP_QUICK_CONTENT;
+		}
 
 		// Actually compare the files
 		// `diffutils_compare_files()` is a fairly thin front-end to GNU diffutils
@@ -207,16 +250,6 @@ int FolderCmp::prepAndCompareFiles(DIFFITEM &di)
 
 			if (!diffdata02.OpenFiles(filepathTransformed[0], filepathTransformed[2]))
 				goto exitPrepAndCompare;
-		}
-
-		// If either file is larger than limit compare files by quick contents
-		// This allows us to (faster) compare big binary files
-		if (nCompMethod == CMP_CONTENT && 
-			(di.diffFileInfo[0].size > m_pCtxt->m_nQuickCompareLimit ||
-			di.diffFileInfo[1].size > m_pCtxt->m_nQuickCompareLimit ||
-			(nDirs > 2 && di.diffFileInfo[2].size > m_pCtxt->m_nQuickCompareLimit)))
-		{
-			nCompMethod = CMP_QUICK_CONTENT;
 		}
 
 		if (nCompMethod == CMP_CONTENT)

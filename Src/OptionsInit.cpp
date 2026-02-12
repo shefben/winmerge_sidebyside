@@ -110,7 +110,8 @@ void Init(COptionsMgr *pOptions)
 	pOptions->InitOption(OPT_DIRVIEW3_COLUMN_WIDTHS, _T(""));
 
 	pOptions->InitOption(OPT_ADDITIONAL_PROPERTIES, _T(""));
-	pOptions->InitOption(OPT_DIRVIEW_SIDEBYSIDE_MODE, false);
+	pOptions->InitOption(OPT_DIRVIEW_SIDEBYSIDE_MODE, true);
+	pOptions->SaveOption(OPT_DIRVIEW_SIDEBYSIDE_MODE, true);
 	pOptions->InitOption(OPT_DIRVIEW_SXS_LEFT_COLUMN_ORDERS, _T(""));
 	pOptions->InitOption(OPT_DIRVIEW_SXS_LEFT_COLUMN_WIDTHS, _T(""));
 	pOptions->InitOption(OPT_DIRVIEW_SXS_RIGHT_COLUMN_ORDERS, _T(""));
@@ -124,7 +125,7 @@ void Init(COptionsMgr *pOptions)
 	pOptions->InitOption(OPT_DIRVIEW_SXS_NAME_FILTER, _T(""));
 	pOptions->InitOption(OPT_DIRVIEW_SXS_ROW_STRIPES, false);
 	pOptions->InitOption(OPT_DIRVIEW_SXS_IGNORE_FOLDER_STRUCTURE, false);
-	pOptions->InitOption(OPT_DIRVIEW_SXS_AUTO_EXPAND_MODE, 0, 0, 2);
+	pOptions->InitOption(OPT_DIRVIEW_SXS_AUTO_EXPAND_MODE, 1, 0, 2);
 	pOptions->InitOption(OPT_DIRVIEW_SXS_SHOW_VERSION_COL, false);
 	pOptions->InitOption(OPT_DIRVIEW_SXS_SHOW_OWNER_COL, false);
 	pOptions->InitOption(OPT_DIRVIEW_SXS_ADV_FILTER_DATE_FROM, _T(""));
@@ -133,8 +134,34 @@ void Init(COptionsMgr *pOptions)
 	pOptions->InitOption(OPT_DIRVIEW_SXS_ADV_FILTER_SIZE_MAX, (int)-1);
 	pOptions->InitOption(OPT_DIRVIEW_SXS_ADV_FILTER_ATTR, _T(""));
 	pOptions->InitOption(OPT_DIRVIEW_SXS_KEY_BINDINGS, _T(""));
+	pOptions->InitOption(OPT_DIRVIEW_SXS_THIN_GUTTER, true);
+	pOptions->InitOption(OPT_DIRVIEW_SXS_INCLUDE_FILES, _T("*.*"));
+	pOptions->InitOption(OPT_DIRVIEW_SXS_EXCLUDE_FILES, _T(""));
+	pOptions->InitOption(OPT_DIRVIEW_SXS_INCLUDE_FOLDERS, _T("*"));
+	pOptions->InitOption(OPT_DIRVIEW_SXS_EXCLUDE_FOLDERS, _T(""));
+	pOptions->InitOption(OPT_DIRVIEW_SXS_LEFT_READONLY, false);
+	pOptions->InitOption(OPT_DIRVIEW_SXS_RIGHT_READONLY, false);
+	pOptions->InitOption(OPT_DIRVIEW_SXS_DESCRIPTION, _T(""));
 	pOptions->InitOption(OPT_CMP_IGNORE_SMALL_FILETIME_SECS, (int)2, 0, 120);
 	pOptions->InitOption(OPT_CMP_SXS_CRC_MODE, false);
+	pOptions->InitOption(OPT_CMP_SXS_COMPARE_SIZE, true);
+	pOptions->InitOption(OPT_CMP_SXS_COMPARE_TIMESTAMPS, true);
+	pOptions->InitOption(OPT_CMP_SXS_COMPARE_CONTENTS, false);
+	pOptions->InitOption(OPT_CMP_SXS_CONTENTS_MODE, 0);
+	pOptions->InitOption(OPT_CMP_SXS_COMPARE_VERSIONS, false);
+	pOptions->InitOption(OPT_CMP_SXS_COMPARE_CASE, false);
+	pOptions->InitOption(OPT_CMP_SXS_ARCHIVE_MODE, 0);
+	pOptions->InitOption(OPT_CMP_SXS_EXPAND_ON_LOAD, true);
+	pOptions->InitOption(OPT_CMP_SXS_EXPAND_DIFFS_ONLY, false);
+	pOptions->InitOption(OPT_CMP_SXS_ATTR_ARCHIVE, true);
+	pOptions->InitOption(OPT_CMP_SXS_ATTR_SYSTEM, true);
+	pOptions->InitOption(OPT_CMP_SXS_ATTR_HIDDEN, true);
+	pOptions->InitOption(OPT_CMP_SXS_ATTR_READONLY, true);
+	pOptions->InitOption(OPT_CMP_SXS_ALIGN_DIFF_EXT, false);
+	pOptions->InitOption(OPT_CMP_SXS_ALIGN_UNICODE, true);
+	pOptions->InitOption(OPT_CMP_SXS_SKIP_IF_QUICK_SAME, false);
+	pOptions->InitOption(OPT_CMP_SXS_OVERRIDE_QUICK, true);
+	pOptions->InitOption(OPT_CMP_SXS_EXCLUDE_OS_FILES, true);
 
 	pOptions->InitOption(OPT_REPORTFILES_REPORTTYPE, 0, 0, 3);
 	pOptions->InitOption(OPT_REPORTFILES_COPYTOCLIPBOARD, false);
@@ -173,6 +200,7 @@ void Init(COptionsMgr *pOptions)
 	pOptions->InitOption(OPT_CMP_IGNORE_REPARSE_POINTS, false);
 	pOptions->InitOption(OPT_CMP_IGNORE_CODEPAGE, false);
 	pOptions->InitOption(OPT_CMP_INCLUDE_SUBDIRS, true);
+	pOptions->InitOption(OPT_CMP_TRUST_FILE_METADATA, true);
 	pOptions->InitOption(OPT_CMP_ENABLE_IMGCMP_IN_DIRCMP, false);
 	pOptions->InitOption(OPT_CMP_ADDITIONAL_CONDITION, _T(""));
 	pOptions->InitOption(OPT_CMP_RENAME_MOVE_DETECTION, 0);

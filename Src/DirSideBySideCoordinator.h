@@ -12,6 +12,7 @@
 
 #include <vector>
 #include <map>
+#include <unordered_map>
 #include <memory>
 #include "UnicodeString.h"
 #include "DirActions.h"
@@ -77,6 +78,9 @@ public:
 	/** Get number of synchronized rows */
 	int GetRowCount() const { return static_cast<int>(m_rowMapping.size()); }
 
+	/** Clear the row mapping (invalidates all DIFFITEM pointers) */
+	void ClearRowMapping() { m_rowMapping.clear(); }
+
 	/** Get the DIFFITEM for a given row */
 	DIFFITEM* GetDiffItemAt(int row) const;
 
@@ -91,8 +95,11 @@ public:
 	int GetActivePane() const { return m_nActivePane; }
 	void SetActivePane(int pane) { m_nActivePane = pane; }
 
-	/** Compute folder content status for icon determination */
+	/** Compute folder content status for icon determination (cached) */
 	FolderContentStatus ComputeFolderContentStatus(const DIFFITEM &di) const;
+
+	/** Invalidate the folder content status cache (call when comparison results change) */
+	void InvalidateFolderStatusCache() { m_folderStatusCache.clear(); }
 
 	/** Get pane-specific icon image index */
 	int GetPaneColImage(const DIFFITEM &di, int pane) const;
@@ -194,6 +201,10 @@ public:
 	const AdvancedFilter& GetAdvancedFilter() const { return m_advFilter; }
 	bool PassesAdvancedFilter(const DIFFITEM& di) const;
 
+	/** Always show folders — even when filtering hides all children */
+	void SetAlwaysShowFolders(bool b) { m_bAlwaysShowFolders = b; }
+	bool GetAlwaysShowFolders() const { return m_bAlwaysShowFolders; }
+
 	/** Ignore folder structure mode — align files by name only */
 	void SetIgnoreFolderStructure(bool bIgnore);
 	bool GetIgnoreFolderStructure() const { return m_bIgnoreFolderStructure; }
@@ -244,12 +255,21 @@ private:
 	/** Advanced filter */
 	AdvancedFilter m_advFilter;
 
+	/** Always show folders mode */
+	bool m_bAlwaysShowFolders;
+
 	/** Ignore folder structure mode */
 	bool m_bIgnoreFolderStructure;
 
 	/** Alignment overrides */
 	std::map<DIFFITEM*, DIFFITEM*> m_alignmentOverrides;
 
+	/** Whether auto-expand has been applied (only once on first display) */
+	bool m_bAutoExpandApplied;
+
 	/** Background scanning state */
 	bool m_bScanningInProgress;
+
+	/** Cache of computed folder content status to avoid recursive recomputation per draw */
+	mutable std::unordered_map<const DIFFITEM*, FolderContentStatus> m_folderStatusCache;
 };

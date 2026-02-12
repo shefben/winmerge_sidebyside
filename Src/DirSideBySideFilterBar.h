@@ -15,14 +15,13 @@
 class CDirSideBySideCoordinator;
 
 /**
- * @brief Filter toggle toolbar for side-by-side folder comparison mode.
+ * @brief BC-style filter bar for side-by-side folder comparison mode.
  *
- * Displays a row of toggle buttons: All | Different | Identical |
- * Orphans Left | Orphans Right | Newer Left | Newer Right | Skipped |
- * Suppress Filters.
- * Each button toggles the corresponding display filter and triggers redisplay.
+ * Displays a clean text filter field with a "Filters" dropdown button
+ * (popup menu with checkable filter options) and optional "Peek" button.
+ * Replaces the old colored toggle button toolbar with a cleaner UI.
  */
-class CDirSideBySideFilterBar : public CToolBar
+class CDirSideBySideFilterBar : public CControlBar
 {
 	DECLARE_DYNAMIC(CDirSideBySideFilterBar)
 public:
@@ -30,6 +29,8 @@ public:
 	virtual ~CDirSideBySideFilterBar();
 
 	BOOL Create(CWnd* pParentWnd);
+	CSize CalcFixedLayout(BOOL bStretch, BOOL bHorz) override;
+	void OnUpdateCmdUI(CFrameWnd* pTarget, BOOL bDisableIfNoHndler) override {}
 
 	void SetCoordinator(CDirSideBySideCoordinator* pCoordinator) { m_pCoordinator = pCoordinator; }
 
@@ -37,10 +38,19 @@ public:
 
 protected:
 	CDirSideBySideCoordinator* m_pCoordinator;
-	CEdit m_editNameFilter;           /**< Name filter pattern edit control */
-	CStatic m_labelNameFilter;        /**< Label for name filter edit */
-	CFont m_editFont;                 /**< Font for the edit control */
+	CStatic m_labelFilter;            /**< "Filter:" label */
+	CEdit m_editFilter;               /**< Filter pattern edit control */
+	CButton m_btnFilters;             /**< "Filters" dropdown button */
+	CButton m_btnPeek;                /**< "Peek" toggle button */
+	CFont m_editFont;                 /**< Font for the controls */
+	CBrush m_brDarkBg;                /**< Dark background brush */
+	CBrush m_brDarkEdit;              /**< Dark edit background brush */
 
+	afx_msg void OnSize(UINT nType, int cx, int cy);
+	afx_msg BOOL OnEraseBkgnd(CDC* pDC);
+	afx_msg HBRUSH OnCtlColor(CDC* pDC, CWnd* pWnd, UINT nCtlColor);
+	afx_msg void OnDrawItem(int nIDCtl, LPDRAWITEMSTRUCT lpDIS);
+	afx_msg void OnPeek();
 	afx_msg void OnFilterAll();
 	afx_msg void OnFilterDifferent();
 	afx_msg void OnFilterIdentical();
@@ -51,6 +61,8 @@ protected:
 	afx_msg void OnFilterSkipped();
 	afx_msg void OnSuppressFilters();
 	afx_msg void OnNameFilterChanged();
+	afx_msg void OnAdvancedFilter();
+	afx_msg void OnFiltersDropdown();
 
 	afx_msg void OnUpdateFilterAll(CCmdUI* pCmdUI);
 	afx_msg void OnUpdateFilterDifferent(CCmdUI* pCmdUI);

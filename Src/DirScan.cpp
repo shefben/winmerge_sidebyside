@@ -8,6 +8,7 @@
 #include "DirScan.h"
 #include <cassert>
 #include <memory>
+#include <thread>
 #define POCO_NO_UNWINDOWS 1
 #include <Poco/Semaphore.h>
 #include <Poco/Notification.h>
@@ -160,8 +161,27 @@ int DirScan_GetItems(const PathContext &paths, const String subdir[],
 	}
 
 	DirItemArray dirs[3], aFiles[3];
-	for (int nIndex = 0; nIndex < nDirs; nIndex++)
-		DirTravel::LoadAndSortFiles(sDir[nIndex], &dirs[nIndex], &aFiles[nIndex], casesensitive);
+	// Scan left/right directories in parallel for better I/O throughput
+	if (nDirs >= 2)
+	{
+		std::thread threads[3];
+		for (int nIndex = 0; nIndex < nDirs; nIndex++)
+		{
+			threads[nIndex] = std::thread([&, nIndex]() {
+				try {
+					DirTravel::LoadAndSortFiles(sDir[nIndex], &dirs[nIndex], &aFiles[nIndex], casesensitive);
+				} catch (...) {
+					// Swallow to prevent std::terminate() — empty arrays means orphans
+				}
+			});
+		}
+		for (int nIndex = 0; nIndex < nDirs; nIndex++)
+			threads[nIndex].join();
+	}
+	else
+	{
+		DirTravel::LoadAndSortFiles(sDir[0], &dirs[0], &aFiles[0], casesensitive);
+	}
 
 	// Allow user to abort scanning
 	if (pCtxt->ShouldAbort())
@@ -460,7 +480,8 @@ int DirScan_CompareItems(DiffFuncStruct *myStruct, DIFFITEM *parentdiffpos)
 	const int compareMethod = myStruct->context->GetCompareMethod();
 	int nworkers = 1;
 
-	if (compareMethod == CMP_CONTENT || compareMethod == CMP_QUICK_CONTENT)
+	if (compareMethod == CMP_CONTENT || compareMethod == CMP_QUICK_CONTENT ||
+		compareMethod == CMP_BINARY_CONTENT)
 	{
 		nworkers = myStruct->nThreadCount;
 		if (nworkers <= 0)

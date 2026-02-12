@@ -28,6 +28,8 @@
 #include "IListCtrlImpl.h"
 #include "DirGutterView.h"
 #include "MainFrm.h"
+#include "FileLocation.h"
+#include "FileTransform.h"
 #include "paths.h"
 #include "ShellFileOperations.h"
 #include <afxole.h>
@@ -36,13 +38,89 @@
 #include <shellapi.h>
 #include <Shlwapi.h>
 #include <fstream>
+#include <uxtheme.h>
+#pragma comment(lib, "uxtheme.lib")
 
 #ifdef _DEBUG
 #define new DEBUG_NEW
 #endif
 
+// Beyond Compare dark theme color palette
+namespace BcColors
+{
+	// Core dark theme backgrounds
+	static const COLORREF BG_DARK      = RGB(30, 33, 33);    // List even-row bg
+	static const COLORREF BG_ALT       = RGB(38, 42, 42);    // List odd-row bg (stripe)
+	static const COLORREF TOOLBAR_BG   = RGB(45, 48, 50);    // Toolbar/filter bar bg
+	static const COLORREF HEADER_BG    = RGB(50, 55, 58);    // Header bar bg
+	static const COLORREF COLHDR_BG    = RGB(35, 40, 42);    // Column header bg
+	static const COLORREF GUTTER_BG    = RGB(45, 48, 50);    // Gutter bg
+	static const COLORREF BORDER       = RGB(70, 75, 75);    // Subtle borders
+
+	// Text colors — red=different, purple=orphan, white=same
+	static const COLORREF TEXT_NORMAL   = RGB(255, 255, 255); // Same/identical file text (white in dark mode)
+	static const COLORREF TEXT_ORPHAN   = RGB(150, 100, 220); // Orphan files (purple)
+	static const COLORREF TEXT_DIFF     = RGB(220, 60, 60);   // Different files (red)
+	static const COLORREF TEXT_FILTERED = RGB(100, 100, 100); // Filtered (dim gray)
+	static const COLORREF TEXT_HEADER   = RGB(200, 200, 200); // Header/column text
+
+	// Folder text colors — same scheme: red=different, purple=orphan, white=same
+	static const COLORREF FOLDER_IDENTICAL = RGB(255, 255, 255); // All children identical (white)
+	static const COLORREF FOLDER_DIFFERENT = RGB(220, 60, 60);   // Contains differences (red)
+	static const COLORREF FOLDER_ORPHAN    = RGB(150, 100, 220); // Orphan folder (purple)
+	static const COLORREF FOLDER_MIXED     = RGB(220, 60, 60);   // Mixed diffs+orphans (red)
+	static const COLORREF FOLDER_UNKNOWN   = RGB(200, 180, 60);  // Unknown/unscanned (yellow)
+
+	// Folder icon fill colors — same scheme: red=different, purple=orphan, gray=same
+	static const COLORREF ICON_FOLDER_IDENTICAL = RGB(180, 180, 180); // Gray folder (same)
+	static const COLORREF ICON_FOLDER_DIFFERENT = RGB(220, 50, 50);   // Red folder (different)
+	static const COLORREF ICON_FOLDER_ORPHAN    = RGB(140, 95, 210);  // Purple folder (orphan)
+	static const COLORREF ICON_FOLDER_MIXED     = RGB(220, 50, 50);   // Red folder (mixed diffs)
+	static const COLORREF ICON_FOLDER_UNKNOWN   = RGB(200, 180, 50);  // Yellow folder (unknown)
+}
+
 // Default column width (same value as CDirView)
 constexpr int DefColumnWidth = 111;
+
+// BC-style colored folder icon indices (appended after standard icons)
+enum BcFolderIcon
+{
+	BCFOLDER_IDENTICAL = 0, // Gray folder — all children same
+	BCFOLDER_DIFFERENT,     // Red folder — contains differences
+	BCFOLDER_ORPHAN,        // Purple folder — orphan (one side only)
+	BCFOLDER_MIXED,         // Red-ish folder — mixed diffs + orphans
+	BCFOLDER_UNKNOWN,       // Yellow folder — unscanned / unknown
+	BCFOLDER_COUNT
+};
+
+// Base index in the image list where BC folder icons start
+static int s_nBcFolderIconBase = -1;
+
+/**
+ * @brief Draw a simple folder icon shape filled with a given color.
+ * The folder is drawn as: a tab on top-left, then a rectangle body.
+ */
+static void DrawColoredFolderIcon(CDC &dc, int cx, int cy, COLORREF fillColor)
+{
+	// Background: transparent (already cleared)
+	CBrush brush(fillColor);
+	CPen pen(PS_SOLID, 1, RGB(GetRValue(fillColor) * 2 / 3,
+		GetGValue(fillColor) * 2 / 3, GetBValue(fillColor) * 2 / 3));
+	CBrush* pOldBrush = dc.SelectObject(&brush);
+	CPen* pOldPen = dc.SelectObject(&pen);
+
+	// Tab portion (top-left): small rectangle
+	int tabW = cx * 5 / 12;
+	int tabH = cy / 5;
+	dc.Rectangle(1, 1, tabW, 1 + tabH);
+
+	// Body: main folder rectangle below the tab
+	int bodyTop = 1 + tabH - 1;
+	dc.Rectangle(1, bodyTop, cx - 1, cy - 1);
+
+	dc.SelectObject(pOldBrush);
+	dc.SelectObject(pOldPen);
+}
 
 // Text buffer for LVN_GETDISPINFO
 static String s_rgDispinfoText[2];
@@ -66,12 +144,17 @@ CDirPaneView::CDirPaneView()
 	, m_pList(nullptr)
 	, m_bUseColors(true)
 	, m_bRowStripes(false)
+	, m_bRedisplayPending(false)
+	, m_nCachedToleranceSecs(-1)
 {
 	m_cachedColors = {};
 }
 
 CDirPaneView::~CDirPaneView()
 {
+	// Kill any pending redisplay timer to prevent post-destruction callback
+	if (m_bRedisplayPending)
+		KillTimer(TIMER_REDISPLAY);
 }
 
 #ifdef _DEBUG
@@ -99,10 +182,13 @@ CDiffContext& CDirPaneView::GetDiffContext()
 
 BEGIN_MESSAGE_MAP(CDirPaneView, CListView)
 	ON_NOTIFY_REFLECT(NM_CUSTOMDRAW, OnCustomDraw)
+	ON_NOTIFY(NM_CUSTOMDRAW, 0, OnHeaderCustomDraw)
+	ON_NOTIFY_REFLECT(NM_DBLCLK, OnDblClick)
 	ON_WM_LBUTTONDBLCLK()
 	ON_WM_KEYDOWN()
 	ON_WM_CONTEXTMENU()
 	ON_WM_SIZE()
+	ON_WM_TIMER()
 	ON_MESSAGE(MSG_UI_UPDATE, OnUpdateUIMessage)
 	ON_COMMAND(ID_DIR_SXS_SWAP_SIDES, OnSxsSwapSides)
 	ON_COMMAND(ID_DIR_SXS_COPY, OnSxsCopy)
@@ -222,6 +308,9 @@ void CDirPaneView::OnInitialUpdate()
 	auto properties = strutils::split<std::vector<String>>(GetOptionsMgr()->GetString(OPT_ADDITIONAL_PROPERTIES), ' ');
 	m_pColItems.reset(new DirViewColItems(pDoc->m_nDirs, properties));
 
+	// In SxS mode, restrict columns to Name/Ext/Size/Modified for this pane
+	m_pColItems->SetSxSPaneColumns(m_nThisPane);
+
 	m_pList->SendMessage(CCM_SETUNICODEFORMAT, TRUE, 0);
 
 	// Load user-selected font
@@ -231,8 +320,25 @@ void CDirPaneView::OnInitialUpdate()
 		CWnd::SetFont(&m_font, TRUE);
 	}
 
-	if (m_bUseColors)
-		m_pList->SetBkColor(m_cachedColors.clrDirMargin);
+	// Create bold font for directory names (Phase 2: tree polish)
+	{
+		LOGFONT lf = {};
+		if (m_font.GetSafeHandle())
+			m_font.GetLogFont(&lf);
+		else
+		{
+			NONCLIENTMETRICS ncm = { sizeof NONCLIENTMETRICS };
+			SystemParametersInfo(SPI_GETNONCLIENTMETRICS, sizeof NONCLIENTMETRICS, &ncm, 0);
+			lf = ncm.lfMessageFont;
+		}
+		lf.lfWeight = FW_BOLD;
+		m_boldFont.CreateFontIndirect(&lf);
+	}
+
+	// Set dark theme background colors
+	m_pList->SetBkColor(BcColors::BG_DARK);
+	m_pList->SetTextBkColor(BcColors::BG_DARK);
+	m_pList->SetTextColor(BcColors::TEXT_NORMAL);
 
 	// Replace standard header with sort header
 	HWND hWnd = ListView_GetHeader(m_pList->m_hWnd);
@@ -258,41 +364,80 @@ void CDirPaneView::OnInitialUpdate()
 	};
 	for (auto id : icon_ids)
 		VERIFY(-1 != m_imageList.Add((HICON)LoadImage(AfxGetInstanceHandle(), MAKEINTRESOURCE(id), IMAGE_ICON, iconCX, iconCY, 0)));
-	m_pList->SetImageList(&m_imageList, LVSIL_SMALL);
 
-	// Restore column orders — use per-pane options in SxS mode
-	const String& colOrderOpt = (m_nThisPane == 0) ? OPT_DIRVIEW_SXS_LEFT_COLUMN_ORDERS :
-		OPT_DIRVIEW_SXS_RIGHT_COLUMN_ORDERS;
-	String colOrders = GetOptionsMgr()->GetString(colOrderOpt);
-	if (colOrders.empty())
-		colOrders = GetOptionsMgr()->GetString(pDoc->m_nDirs < 3 ? OPT_DIRVIEW_COLUMN_ORDERS : OPT_DIRVIEW3_COLUMN_ORDERS);
-	m_pColItems->LoadColumnOrders(colOrders);
-
-	// Load columns
-	m_pList->SetRedraw(FALSE);
-
-	// Insert column headers
-	for (int i = 0; i < m_pColItems->GetColCount(); ++i)
+	// Append BC-style colored folder icons (GDI-drawn)
 	{
-		int phy = m_pColItems->ColLogToPhys(i);
-		if (phy >= 0)
+		s_nBcFolderIconBase = m_imageList.GetImageCount();
+		COLORREF folderColors[BCFOLDER_COUNT] = {
+			BcColors::ICON_FOLDER_IDENTICAL,
+			BcColors::ICON_FOLDER_DIFFERENT,
+			BcColors::ICON_FOLDER_ORPHAN,
+			BcColors::ICON_FOLDER_MIXED,
+			BcColors::ICON_FOLDER_UNKNOWN,
+		};
+		CDC dcMem;
+		dcMem.CreateCompatibleDC(nullptr);
+		for (int fi = 0; fi < BCFOLDER_COUNT; fi++)
 		{
-			String s = m_pColItems->GetColDisplayName(i);
-			int fmt = m_pColItems->GetDirColInfo(i)->alignment;
-			m_pList->InsertColumn(phy, s.c_str(), fmt, DefColumnWidth);
+			CBitmap bmpColor, bmpMask;
+
+			// Create 32-bit color bitmap
+			bmpColor.CreateBitmap(iconCX, iconCY, 1, 32, nullptr);
+			CBitmap* pOld = dcMem.SelectObject(&bmpColor);
+
+			// Clear to transparent (black = masked out)
+			dcMem.FillSolidRect(0, 0, iconCX, iconCY, RGB(0, 0, 0));
+			DrawColoredFolderIcon(dcMem, iconCX, iconCY, folderColors[fi]);
+			dcMem.SelectObject(pOld);
+
+			// Create mask bitmap (black = opaque, white = transparent)
+			bmpMask.CreateBitmap(iconCX, iconCY, 1, 1, nullptr);
+			pOld = dcMem.SelectObject(&bmpMask);
+			dcMem.FillSolidRect(0, 0, iconCX, iconCY, RGB(255, 255, 255));
+
+			// Draw the same folder shape in black on the mask (opaque area)
+			CBrush black(RGB(0, 0, 0));
+			CPen blackPen(PS_SOLID, 1, RGB(0, 0, 0));
+			CBrush* pOldBr = dcMem.SelectObject(&black);
+			CPen* pOldPen = dcMem.SelectObject(&blackPen);
+			int tabW = iconCX * 5 / 12;
+			int tabH = iconCY / 5;
+			dcMem.Rectangle(1, 1, tabW, 1 + tabH);
+			dcMem.Rectangle(1, tabH, iconCX - 1, iconCY - 1);
+			dcMem.SelectObject(pOldBr);
+			dcMem.SelectObject(pOldPen);
+			dcMem.SelectObject(pOld);
+
+			m_imageList.Add(&bmpColor, &bmpMask);
 		}
 	}
 
-	// Load column widths — use per-pane options in SxS mode
+	m_pList->SetImageList(&m_imageList, LVSIL_SMALL);
+
+	// Load columns — SxS mode uses fixed 4-column layout
+	m_pList->SetRedraw(FALSE);
+
+	// DPI-aware default widths
+	const int dpi = CClientDC(this).GetDeviceCaps(LOGPIXELSX);
+	auto px = [dpi](int pt) { return MulDiv(pt, dpi, 72); };
+
+	// Insert the 4 BC-style column headers
+	m_pList->InsertColumn(0, _T("Name"),     LVCFMT_LEFT,  px(200));
+	m_pList->InsertColumn(1, _T("Ext"),      LVCFMT_LEFT,  px(50));
+	m_pList->InsertColumn(2, _T("Size"),     LVCFMT_RIGHT, px(70));
+	m_pList->InsertColumn(3, _T("Modified"), LVCFMT_LEFT,  px(130));
+
+	// Load saved column widths if available
 	const String& colWidthOpt = (m_nThisPane == 0) ? OPT_DIRVIEW_SXS_LEFT_COLUMN_WIDTHS :
 		OPT_DIRVIEW_SXS_RIGHT_COLUMN_WIDTHS;
 	String colWidths = GetOptionsMgr()->GetString(colWidthOpt);
-	if (colWidths.empty())
-		colWidths = GetOptionsMgr()->GetString(pDoc->m_nDirs < 3 ? OPT_DIRVIEW_COLUMN_WIDTHS : OPT_DIRVIEW3_COLUMN_WIDTHS);
-	m_pColItems->LoadColumnWidths(
-		colWidths,
-		std::bind(&CListCtrl::SetColumnWidth, m_pList, std::placeholders::_1, std::placeholders::_2),
-		MulDiv(DefColumnWidth, CClientDC(this).GetDeviceCaps(LOGPIXELSX), 72));
+	if (!colWidths.empty())
+	{
+		m_pColItems->LoadColumnWidths(
+			colWidths,
+			std::bind(&CListCtrl::SetColumnWidth, m_pList, std::placeholders::_1, std::placeholders::_2),
+			px(DefColumnWidth));
+	}
 
 	// Extended styles
 	DWORD exstyle = LVS_EX_FULLROWSELECT | LVS_EX_HEADERDRAGDROP | LVS_EX_INFOTIP | LVS_EX_DOUBLEBUFFER;
@@ -471,14 +616,53 @@ void CDirPaneView::ReflectGetdispinfo(NMLVDISPINFO *pParam)
 
 /**
  * @brief Get the icon image index for an item in this pane.
- * Uses the coordinator's pane-aware icon mapping which considers
- * folder content status for directory items.
+ * For directories, uses BC-style colored folder icons based on content status.
+ * For files, delegates to the standard GetColImage.
  */
 int CDirPaneView::GetPaneColImage(const DIFFITEM &di) const
 {
+	if (!di.diffcode.isDirectory() || s_nBcFolderIconBase < 0)
+	{
+		// Non-directory or BC icons not loaded — use standard icons
+		if (m_pCoordinator)
+			return m_pCoordinator->GetPaneColImage(di, m_nThisPane);
+		return GetColImage(di);
+	}
+
+	// Directory: use BC-style colored folder icons
+	if (di.diffcode.isResultError())
+		return DIFFIMG_ERROR;
+	if (di.diffcode.isResultAbort())
+		return DIFFIMG_ABORT;
+	if (di.diffcode.isResultFiltered())
+		return DIFFIMG_DIRSKIP;
+
+	const CDiffContext &ctxt = GetDiffContext();
+
+	// Orphan folder
+	if (!IsItemExistAll(ctxt, di))
+		return s_nBcFolderIconBase + BCFOLDER_ORPHAN;
+
+	// Folder on both sides — check content status
 	if (m_pCoordinator)
-		return m_pCoordinator->GetPaneColImage(di, m_nThisPane);
-	return GetColImage(di);
+	{
+		FolderContentStatus status = m_pCoordinator->ComputeFolderContentStatus(di);
+		switch (status)
+		{
+		case FOLDER_STATUS_ALL_SAME:
+			return s_nBcFolderIconBase + BCFOLDER_IDENTICAL;
+		case FOLDER_STATUS_ALL_DIFFERENT:
+			return s_nBcFolderIconBase + BCFOLDER_DIFFERENT;
+		case FOLDER_STATUS_UNIQUE_ONLY:
+			return s_nBcFolderIconBase + BCFOLDER_ORPHAN;
+		case FOLDER_STATUS_MIXED:
+			return s_nBcFolderIconBase + BCFOLDER_MIXED;
+		default:
+			return s_nBcFolderIconBase + BCFOLDER_UNKNOWN;
+		}
+	}
+
+	return s_nBcFolderIconBase + BCFOLDER_UNKNOWN;
 }
 
 /**
@@ -499,7 +683,56 @@ void CDirPaneView::OnCustomDraw(NMHDR* pNMHDR, LRESULT* pResult)
 	}
 	if (lpC->nmcd.dwDrawStage == CDDS_ITEMPREPAINT)
 	{
-		*pResult = CDRF_NOTIFYITEMDRAW;
+		// Check if item is a directory — use bold font + status-based color
+		int nRow = static_cast<int>(lpC->nmcd.dwItemSpec);
+		if (nRow >= 0 && nRow < static_cast<int>(m_listViewItems.size()))
+		{
+			DIFFITEM *key = reinterpret_cast<DIFFITEM*>(m_listViewItems[nRow].lParam);
+			if (key && GetDocument()->HasDiffs())
+			{
+				const CDiffContext &ctxt = GetDiffContext();
+				const DIFFITEM &di = ctxt.GetDiffAt(key);
+				if (di.diffcode.isDirectory())
+				{
+					if (m_boldFont.GetSafeHandle())
+						SelectObject(lpC->nmcd.hdc, m_boldFont.GetSafeHandle());
+
+					// BC-style: folder text color based on content status
+					if (di.diffcode.isResultFiltered())
+						lpC->clrText = BcColors::TEXT_FILTERED;
+					else if (!IsItemExistAll(ctxt, di))
+						lpC->clrText = BcColors::FOLDER_ORPHAN;
+					else if (m_pCoordinator)
+					{
+						FolderContentStatus status = m_pCoordinator->ComputeFolderContentStatus(di);
+						switch (status)
+						{
+						case FOLDER_STATUS_ALL_SAME:
+							lpC->clrText = BcColors::FOLDER_IDENTICAL;
+							break;
+						case FOLDER_STATUS_ALL_DIFFERENT:
+							lpC->clrText = BcColors::FOLDER_DIFFERENT;
+							break;
+						case FOLDER_STATUS_UNIQUE_ONLY:
+							lpC->clrText = BcColors::FOLDER_ORPHAN;
+							break;
+						case FOLDER_STATUS_MIXED:
+							lpC->clrText = BcColors::FOLDER_MIXED;
+							break;
+						default:
+							lpC->clrText = BcColors::FOLDER_UNKNOWN;
+							break;
+						}
+					}
+					else
+						lpC->clrText = BcColors::FOLDER_UNKNOWN;
+
+					*pResult = CDRF_NOTIFYSUBITEMDRAW | CDRF_NEWFONT;
+					return;
+				}
+			}
+		}
+		*pResult = CDRF_NOTIFYSUBITEMDRAW;
 		return;
 	}
 	if (lpC->nmcd.dwDrawStage == (CDDS_ITEMPREPAINT | CDDS_SUBITEM))
@@ -509,21 +742,73 @@ void CDirPaneView::OnCustomDraw(NMHDR* pNMHDR, LRESULT* pResult)
 }
 
 /**
- * @brief Get colors for an item row, considering whether this pane has a real item or placeholder.
- * In SxS mode, provides distinct colors for newer/older/orphan items and
- * teal coloring for items visible due to suppress-filters mode.
+ * @brief Custom draw handler for the column header control (dark theme).
+ */
+void CDirPaneView::OnHeaderCustomDraw(NMHDR* pNMHDR, LRESULT* pResult)
+{
+	LPNMCUSTOMDRAW lpCD = (LPNMCUSTOMDRAW)pNMHDR;
+	*pResult = CDRF_DODEFAULT;
+
+	// Only handle the header control (child of the list)
+	if (!m_pList || lpCD->hdr.hwndFrom != ListView_GetHeader(m_pList->m_hWnd))
+		return;
+
+	if (lpCD->dwDrawStage == CDDS_PREPAINT)
+	{
+		*pResult = CDRF_NOTIFYITEMDRAW;
+		return;
+	}
+	if (lpCD->dwDrawStage == CDDS_ITEMPREPAINT)
+	{
+		// Fill background with dark color
+		::FillRect(lpCD->hdc, &lpCD->rc, (HBRUSH)::CreateSolidBrush(BcColors::COLHDR_BG));
+
+		// Draw bottom border
+		HPEN hPen = ::CreatePen(PS_SOLID, 1, BcColors::BORDER);
+		HPEN hOld = (HPEN)::SelectObject(lpCD->hdc, hPen);
+		::MoveToEx(lpCD->hdc, lpCD->rc.left, lpCD->rc.bottom - 1, nullptr);
+		::LineTo(lpCD->hdc, lpCD->rc.right, lpCD->rc.bottom - 1);
+		::SelectObject(lpCD->hdc, hOld);
+		::DeleteObject(hPen);
+
+		// Get header item text
+		HDITEM hdi = {};
+		tchar_t szText[128] = {};
+		hdi.mask = HDI_TEXT;
+		hdi.pszText = szText;
+		hdi.cchTextMax = _countof(szText);
+		Header_GetItem(lpCD->hdr.hwndFrom, (int)lpCD->dwItemSpec, &hdi);
+
+		// Draw text with light color
+		::SetBkMode(lpCD->hdc, TRANSPARENT);
+		::SetTextColor(lpCD->hdc, BcColors::TEXT_HEADER);
+		CRect rcText = lpCD->rc;
+		rcText.DeflateRect(4, 0);
+		::DrawText(lpCD->hdc, szText, -1, &rcText, DT_LEFT | DT_VCENTER | DT_SINGLELINE | DT_END_ELLIPSIS);
+
+		*pResult = CDRF_SKIPDEFAULT;
+		return;
+	}
+}
+
+/**
+ * @brief Get colors for an item row — Beyond Compare dark theme.
+ * Dark alternating row backgrounds with status-colored text.
  */
 void CDirPaneView::GetColors(int nRow, int nCol, COLORREF& clrBk, COLORREF& clrText) const
 {
+	// Dark alternating rows
+	clrBk = (nRow & 1) ? BcColors::BG_ALT : BcColors::BG_DARK;
+	clrText = BcColors::TEXT_NORMAL;
+
 	if (nRow < 0 || nRow >= static_cast<int>(m_listViewItems.size()))
 		return;
 
 	DIFFITEM *key = reinterpret_cast<DIFFITEM*>(m_listViewItems[nRow].lParam);
 	if (key == nullptr)
 	{
-		// Placeholder row - light gray background
-		clrBk = m_cachedColors.clrDirMargin;
-		clrText = m_cachedColors.clrDirMargin;
+		// Placeholder row — invisible text
+		clrText = clrBk;
 		return;
 	}
 
@@ -535,77 +820,23 @@ void CDirPaneView::GetColors(int nRow, int nCol, COLORREF& clrBk, COLORREF& clrT
 
 	if (di.isEmpty())
 	{
-		clrText = theApp.GetMainSyntaxColors()->GetColor(COLORINDEX_NORMALTEXT);
-		clrBk = theApp.GetMainSyntaxColors()->GetColor(COLORINDEX_BKGND);
+		// Empty item — default colors
 	}
 	else if (di.diffcode.isResultFiltered())
 	{
-		// In suppress-filters mode, show filtered items in teal
-		if (GetOptionsMgr()->GetBool(OPT_DIRVIEW_SXS_SUPPRESS_FILTERS))
-		{
-			clrText = m_cachedColors.clrDirItemSuppressedText;
-			clrBk = m_cachedColors.clrDirItemSuppressed;
-		}
-		else
-		{
-			clrText = m_cachedColors.clrDirItemFilteredText;
-			clrBk = m_cachedColors.clrDirItemFiltered;
-		}
+		clrText = BcColors::TEXT_FILTERED;
 	}
 	else if (!IsItemExistAll(ctxt, di))
 	{
-		// Orphan: unique to one side — use distinct orphan color
-		clrText = m_cachedColors.clrDirItemOrphanText;
-		clrBk = m_cachedColors.clrDirItemOrphan;
+		// Orphan (left-only or right-only)
+		clrText = BcColors::TEXT_ORPHAN;
 	}
 	else if (di.diffcode.isResultDiff())
 	{
-		// Files are different — check newer/older by timestamp
-		int otherPane = (m_nThisPane == 0) ? (ctxt.GetCompareDirs() - 1) : 0;
-		const auto &myTime = di.diffFileInfo[m_nThisPane].mtime;
-		const auto &otherTime = di.diffFileInfo[otherPane].mtime;
-
-		int toleranceSecs = GetOptionsMgr()->GetInt(OPT_CMP_IGNORE_SMALL_FILETIME_SECS);
-		Poco::Timestamp::TimeDiff diff = myTime - otherTime;
-		Poco::Timestamp::TimeDiff toleranceUs = static_cast<Poco::Timestamp::TimeDiff>(toleranceSecs) * Poco::Timestamp::resolution();
-
-		if (diff > toleranceUs)
-		{
-			// This pane's file is newer
-			clrText = m_cachedColors.clrDirItemNewerText;
-			clrBk = m_cachedColors.clrDirItemNewer;
-		}
-		else if (diff < -toleranceUs)
-		{
-			// This pane's file is older
-			clrText = m_cachedColors.clrDirItemOlderText;
-			clrBk = m_cachedColors.clrDirItemOlder;
-		}
-		else
-		{
-			// Same time but different content
-			clrText = m_cachedColors.clrDirItemDiffText;
-			clrBk = m_cachedColors.clrDirItemDiff;
-		}
+		// Different files — all red regardless of timestamp
+		clrText = BcColors::TEXT_DIFF;
 	}
-	else if (di.diffcode.isResultSame())
-	{
-		clrText = m_cachedColors.clrDirItemEqualText;
-		clrBk = m_cachedColors.clrDirItemEqual;
-	}
-	else
-	{
-		clrText = theApp.GetMainSyntaxColors()->GetColor(COLORINDEX_NORMALTEXT);
-		clrBk = theApp.GetMainSyntaxColors()->GetColor(COLORINDEX_BKGND);
-	}
-
-	// Apply alternating row stripes
-	if (m_bRowStripes && (nRow & 1))
-	{
-		clrBk = RGB((GetRValue(clrBk) * 9 + 240) / 10,
-		            (GetGValue(clrBk) * 9 + 240) / 10,
-		            (GetBValue(clrBk) * 9 + 240) / 10);
-	}
+	// else: identical — keep TEXT_NORMAL (white)
 }
 
 /**
@@ -639,6 +870,9 @@ void CDirPaneView::UpdateFromRowMapping()
 	if (!m_pCoordinator || !m_pList)
 		return;
 
+	// Invalidate per-draw caches
+	m_nCachedToleranceSecs = -1;
+
 	m_pList->SetRedraw(FALSE);
 	m_listViewItems.clear();
 
@@ -671,10 +905,38 @@ void CDirPaneView::UpdateFromRowMapping()
 }
 
 /**
- * @brief Handle double-click to open comparison for the selected item.
+ * @brief Handle NM_DBLCLK notification for double-click on list items.
+ * This is the primary handler for double-clicks — more reliable than
+ * WM_LBUTTONDBLCLK for CListView with LVS_OWNERDATA.
+ */
+void CDirPaneView::OnDblClick(NMHDR* pNMHDR, LRESULT* pResult)
+{
+	LPNMITEMACTIVATE pNMIA = reinterpret_cast<LPNMITEMACTIVATE>(pNMHDR);
+	*pResult = 0;
+
+	int nItem = pNMIA->iItem;
+	if (nItem < 0)
+		return;
+
+	DIFFITEM *key = GetItemKey(nItem);
+	if (key == nullptr)
+		return;
+
+	const DIFFITEM &di = GetDiffContext().GetDiffAt(key);
+	if (di.diffcode.isDirectory())
+	{
+		ToggleExpandSubdir(nItem);
+		return;
+	}
+	OpenSelectedItem();
+}
+
+/**
+ * @brief Fallback handler for WM_LBUTTONDBLCLK.
  */
 void CDirPaneView::OnLButtonDblClk(UINT nFlags, CPoint point)
 {
+	// NM_DBLCLK handles the main logic; this is a fallback
 	LVHITTESTINFO lvhti;
 	lvhti.pt = point;
 	m_pList->SubItemHitTest(&lvhti);
@@ -684,7 +946,7 @@ void CDirPaneView::OnLButtonDblClk(UINT nFlags, CPoint point)
 		if (key != nullptr)
 		{
 			const DIFFITEM &di = GetDiffContext().GetDiffAt(key);
-			if (di.diffcode.isDirectory() && di.HasChildren())
+			if (di.diffcode.isDirectory())
 			{
 				ToggleExpandSubdir(lvhti.iItem);
 				return;
@@ -725,8 +987,13 @@ LRESULT CDirPaneView::OnUpdateUIMessage(WPARAM wParam, LPARAM lParam)
 	}
 	else if (wParam == CDiffThread::EVENT_COMPARE_PROGRESSED)
 	{
-		// Refresh both panes
-		m_pCoordinator->Redisplay();
+		// Throttle progress updates — at most once per 500ms to avoid
+		// full tree rebuild on every 2-second progress event
+		if (!m_bRedisplayPending)
+		{
+			m_bRedisplayPending = true;
+			SetTimer(TIMER_REDISPLAY, 500, nullptr);
+		}
 	}
 	else if (wParam == CDiffThread::EVENT_COLLECT_COMPLETED)
 	{
@@ -734,6 +1001,24 @@ LRESULT CDirPaneView::OnUpdateUIMessage(WPARAM wParam, LPARAM lParam)
 	}
 
 	return 0;
+}
+
+/**
+ * @brief Timer handler for throttled redisplay during comparison progress.
+ */
+void CDirPaneView::OnTimer(UINT_PTR nIDEvent)
+{
+	if (nIDEvent == TIMER_REDISPLAY)
+	{
+		KillTimer(TIMER_REDISPLAY);
+		m_bRedisplayPending = false;
+		if (m_pCoordinator)
+			m_pCoordinator->Redisplay();
+	}
+	else
+	{
+		CListView::OnTimer(nIDEvent);
+	}
 }
 
 /**
@@ -762,19 +1047,49 @@ void CDirPaneView::OpenSelectedItem()
 
 	const DIFFITEM &di = ctxt.GetDiffAt(key);
 
-	// Build paths for all existing sides
-	PathContext paths;
-	for (int i = 0; i < ctxt.GetCompareDirs(); i++)
+	if (di.diffcode.isDirectory())
 	{
-		if (di.diffcode.exists(i))
-			paths.SetPath(paths.GetSize(), di.getFilepath(i, ctxt.GetPath(i)));
-		else
-			paths.SetPath(paths.GetSize(), _T(""));
+		// Directory: toggle expand/collapse
+		ToggleExpandSubdir(nItem);
+		return;
 	}
 
+	// Build full paths for all sides (same as CDirView::OpenSelection)
+	PathContext paths = GetItemFileNames(ctxt, di);
+	int nDirs = ctxt.GetCompareDirs();
+
+	// For orphan files (only on one side), use NUL device for the missing side
+	const String sUntitled[] = { _("Untitled Left"),
+		nDirs < 3 ? _("Untitled Right") : _("Untitled Middle"),
+		_("Untitled Right") };
+	PathContext filteredPaths;
+	FileLocation fileloc[3];
+	String strDesc[3];
 	fileopenflags_t dwFlags[3] = {};
-	GetMainFrame()->DoFileOrFolderOpen(&paths, dwFlags, nullptr, _T(""),
-		ctxt.m_bRecursive, nullptr);
+
+	for (int i = 0; i < nDirs; i++)
+	{
+		dwFlags[i] = FFILEOPEN_NOMRU | (pDoc->GetReadOnly(i) ? FFILEOPEN_READONLY : 0);
+		if (di.diffcode.exists(i) && paths::DoesPathExist(paths[i]) != paths::DOES_NOT_EXIST)
+		{
+			fileloc[i].setPath(paths[i]);
+			fileloc[i].encoding = di.diffFileInfo[i].encoding;
+			filteredPaths.SetPath(filteredPaths.GetSize(), paths[i], false);
+		}
+		else
+		{
+			strDesc[i] = sUntitled[i];
+			filteredPaths.SetPath(filteredPaths.GetSize(), paths::NATIVE_NULL_DEVICE_NAME, false);
+		}
+	}
+
+	PackingInfo *infoUnpacker = nullptr;
+	PrediffingInfo *infoPrediffer = nullptr;
+	String filteredFilenames = CDiffContext::GetFilteredFilenames(filteredPaths);
+	GetDiffContext().FetchPluginInfos(filteredFilenames, &infoUnpacker, &infoPrediffer);
+
+	GetMainFrame()->ShowAutoMergeDoc(0, pDoc, nDirs, fileloc,
+		dwFlags, strDesc, _T(""), infoUnpacker, infoPrediffer);
 }
 
 /**
@@ -837,6 +1152,21 @@ void CDirPaneView::OnKeyDown(UINT nChar, UINT nRepCnt, UINT nFlags)
 	}
 	if (nChar == VK_RETURN)
 	{
+		// If focused item is a directory, toggle expand; otherwise open file comparison
+		int nItem = m_pList->GetNextItem(-1, LVNI_FOCUSED);
+		if (nItem >= 0)
+		{
+			DIFFITEM *key = GetItemKey(nItem);
+			if (key)
+			{
+				const DIFFITEM &di = GetDiffContext().GetDiffAt(key);
+				if (di.diffcode.isDirectory())
+				{
+					ToggleExpandSubdir(nItem);
+					return;
+				}
+			}
+		}
 		OpenSelectedItem();
 		return;
 	}
@@ -850,7 +1180,7 @@ void CDirPaneView::OnKeyDown(UINT nChar, UINT nRepCnt, UINT nFlags)
 			if (key)
 			{
 				const DIFFITEM &di = GetDiffContext().GetDiffAt(key);
-				if (di.HasChildren())
+				if (di.diffcode.isDirectory())
 				{
 					if (nChar == VK_RIGHT)
 						ExpandSubdir(nItem);
@@ -1418,9 +1748,8 @@ void CDirPaneView::ExpandSubdir(int sel)
 	DIFFITEM *key = GetItemKey(sel);
 	if (!key)
 		return;
-	const CDiffContext &ctxt = GetDiffContext();
 	DIFFITEM &di = GetDiffContext().GetDiffRefAt(key);
-	if (di.HasChildren())
+	if (di.diffcode.isDirectory())
 	{
 		di.customFlags |= ViewCustomFlags::EXPANDED;
 		m_pCoordinator->Redisplay();
@@ -1438,7 +1767,7 @@ void CDirPaneView::CollapseSubdir(int sel)
 	if (!key)
 		return;
 	DIFFITEM &di = GetDiffContext().GetDiffRefAt(key);
-	if (di.HasChildren())
+	if (di.diffcode.isDirectory())
 	{
 		di.customFlags &= ~ViewCustomFlags::EXPANDED;
 		m_pCoordinator->Redisplay();
@@ -1456,14 +1785,15 @@ void CDirPaneView::ToggleExpandSubdir(int sel)
 	if (!key)
 		return;
 	DIFFITEM &di = GetDiffContext().GetDiffRefAt(key);
-	if (di.HasChildren())
-	{
-		if (di.customFlags & ViewCustomFlags::EXPANDED)
-			di.customFlags &= ~ViewCustomFlags::EXPANDED;
-		else
-			di.customFlags |= ViewCustomFlags::EXPANDED;
-		m_pCoordinator->Redisplay();
-	}
+	if (!di.diffcode.isDirectory())
+		return;
+	// Toggle expand/collapse — even if HasChildren() is false (scan may
+	// still be running), we set the flag so children appear once available.
+	if (di.customFlags & ViewCustomFlags::EXPANDED)
+		di.customFlags &= ~ViewCustomFlags::EXPANDED;
+	else
+		di.customFlags |= ViewCustomFlags::EXPANDED;
+	m_pCoordinator->Redisplay();
 }
 
 /**
@@ -3574,7 +3904,7 @@ static INT_PTR CALLBACK TouchSpecificDlgProc(HWND hDlg, UINT msg, WPARAM wParam,
 			tchar_t buf[64];
 			_stprintf_s(buf, _T("%04d-%02d-%02d %02d:%02d:%02d"),
 				st.wYear, st.wMonth, st.wDay, st.wHour, st.wMinute, st.wSecond);
-			::SetDlgItemText(hDlg, 1001, buf);
+			::SetDlgItemTextW(hDlg, 1001, buf);
 			SetFocus(GetDlgItem(hDlg, 1001));
 		}
 		return FALSE;
@@ -3807,13 +4137,13 @@ static INT_PTR CALLBACK AdvFilterDlgProc(HWND hDlg, UINT msg, WPARAM wParam, LPA
 			auto *pFilter = reinterpret_cast<CDirSideBySideCoordinator::AdvancedFilter*>(lParam);
 			if (pFilter)
 			{
-				::SetDlgItemText(hDlg, 1001, pFilter->dateFrom.c_str());
-				::SetDlgItemText(hDlg, 1002, pFilter->dateTo.c_str());
+				::SetDlgItemTextW(hDlg, 1001, pFilter->dateFrom.c_str());
+				::SetDlgItemTextW(hDlg, 1002, pFilter->dateTo.c_str());
 				if (pFilter->sizeMin >= 0)
 					::SetDlgItemInt(hDlg, 1003, pFilter->sizeMin, FALSE);
 				if (pFilter->sizeMax >= 0)
 					::SetDlgItemInt(hDlg, 1004, pFilter->sizeMax, FALSE);
-				::SetDlgItemText(hDlg, 1005, pFilter->attrMask.c_str());
+				::SetDlgItemTextW(hDlg, 1005, pFilter->attrMask.c_str());
 			}
 		}
 		return TRUE;
@@ -3827,15 +4157,15 @@ static INT_PTR CALLBACK AdvFilterDlgProc(HWND hDlg, UINT msg, WPARAM wParam, LPA
 				if (pFilter)
 				{
 					tchar_t buf[MAX_PATH];
-					::GetDlgItemText(hDlg, 1001, buf, MAX_PATH);
+					::GetDlgItemTextW(hDlg, 1001, buf, MAX_PATH);
 					pFilter->dateFrom = buf;
-					::GetDlgItemText(hDlg, 1002, buf, MAX_PATH);
+					::GetDlgItemTextW(hDlg, 1002, buf, MAX_PATH);
 					pFilter->dateTo = buf;
-					::GetDlgItemText(hDlg, 1003, buf, MAX_PATH);
+					::GetDlgItemTextW(hDlg, 1003, buf, MAX_PATH);
 					pFilter->sizeMin = (buf[0] != 0) ? _ttoi(buf) : -1;
-					::GetDlgItemText(hDlg, 1004, buf, MAX_PATH);
+					::GetDlgItemTextW(hDlg, 1004, buf, MAX_PATH);
 					pFilter->sizeMax = (buf[0] != 0) ? _ttoi(buf) : -1;
-					::GetDlgItemText(hDlg, 1005, buf, MAX_PATH);
+					::GetDlgItemTextW(hDlg, 1005, buf, MAX_PATH);
 					pFilter->attrMask = buf;
 				}
 			}
@@ -4517,4 +4847,23 @@ void CDirPaneView::SaveKeyBindings()
 			kv.second.bAlt ? 1 : 0);
 	}
 	GetOptionsMgr()->SaveOption(OPT_DIRVIEW_SXS_KEY_BINDINGS, result);
+}
+
+/**
+ * @brief Navigate to a new folder path on this pane.
+ */
+void CDirPaneView::NavigateToPath(const String& sPath)
+{
+	CDirDoc* pDoc = GetDocument();
+	if (!pDoc || !pDoc->HasDiffs())
+		return;
+
+	const CDiffContext& ctxt = pDoc->GetDiffContext();
+	PathContext paths = ctxt.GetNormalizedPaths();
+	if (m_nThisPane >= 0 && m_nThisPane < paths.GetSize())
+		paths.SetPath(m_nThisPane, sPath);
+
+	fileopenflags_t dwFlags[3] = {};
+	GetMainFrame()->DoFileOrFolderOpen(&paths, dwFlags, nullptr, _T(""),
+		ctxt.m_bRecursive, nullptr);
 }

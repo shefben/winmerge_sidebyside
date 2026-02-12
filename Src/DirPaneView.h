@@ -18,6 +18,7 @@
 #include "SortHeaderCtrl.h"
 #include "UnicodeString.h"
 #include "IListCtrlImpl.h"
+#include "EditorFilepathBar.h"
 
 class CDirDoc;
 class CDirFrame;
@@ -93,11 +94,18 @@ protected:
 	DIRCOLORSETTINGS m_cachedColors;
 	bool m_bUseColors;
 	CFont m_font;
+	CFont m_boldFont;               /**< Bold font for directory names */
 	String m_sFindPattern;          /**< Last find filename pattern */
 	bool m_bRowStripes;             /**< Alternating row stripe mode */
+	bool m_bRedisplayPending;       /**< Whether a throttled redisplay is pending */
+	int m_nCachedToleranceSecs;     /**< Cached tolerance for draw pass */
 
+	static const UINT_PTR TIMER_REDISPLAY = 100;  /**< Timer ID for throttled redisplay */
+
+public:
 	/** Configurable key bindings: command ID -> (vkKey, modifiers) */
 	struct KeyBinding { UINT vkKey; bool bCtrl; bool bShift; bool bAlt; };
+protected:
 	std::map<UINT, KeyBinding> m_keyBindings;
 	void LoadKeyBindings();
 	void SaveKeyBindings();
@@ -118,10 +126,13 @@ protected:
 
 	// Message map
 	afx_msg void OnCustomDraw(NMHDR* pNMHDR, LRESULT* pResult);
+	afx_msg void OnHeaderCustomDraw(NMHDR* pNMHDR, LRESULT* pResult);
+	afx_msg void OnDblClick(NMHDR* pNMHDR, LRESULT* pResult);
 	afx_msg void OnLButtonDblClk(UINT nFlags, CPoint point);
 	afx_msg void OnKeyDown(UINT nChar, UINT nRepCnt, UINT nFlags);
 	afx_msg void OnContextMenu(CWnd* pWnd, CPoint point);
 	afx_msg void OnSize(UINT nType, int cx, int cy);
+	afx_msg void OnTimer(UINT_PTR nIDEvent);
 	afx_msg LRESULT OnUpdateUIMessage(WPARAM wParam, LPARAM lParam);
 	afx_msg void OnSxsSwapSides();
 	afx_msg void OnSxsCopy();
@@ -237,6 +248,8 @@ protected:
 
 	// Explorer context menu helper
 	void ShowExplorerContextMenu(const String& filePath, CPoint pt);
+
+	void NavigateToPath(const String& sPath);
 
 	DECLARE_MESSAGE_MAP()
 };

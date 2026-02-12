@@ -25,6 +25,17 @@
 #define new DEBUG_NEW
 #endif
 
+// Beyond Compare dark theme colors for gutter
+namespace BcGutterColors
+{
+	static const COLORREF BG        = RGB(45, 48, 50);
+	static const COLORREF BORDER    = RGB(70, 75, 75);
+	static const COLORREF TEXT_SAME   = RGB(255, 255, 255); // Same (white)
+	static const COLORREF TEXT_DIFF   = RGB(220, 60, 60);  // Different (red)
+	static const COLORREF TEXT_ORPHAN = RGB(150, 100, 220); // Orphan (purple)
+	static const COLORREF TEXT_FILTER = RGB(100, 100, 100); // Filtered (gray)
+}
+
 // Gutter width in pixels
 static const int GUTTER_WIDTH = 24;
 
@@ -88,9 +99,25 @@ void CDirGutterView::OnDraw(CDC* pDC)
 	CRect rcClient;
 	GetClientRect(&rcClient);
 
-	// Background
-	COLORREF clrBg = GetSysColor(COLOR_3DFACE);
+	// Dark theme background
+	COLORREF clrBg = BcGutterColors::BG;
 	pDC->FillSolidRect(&rcClient, clrBg);
+
+	bool bThinMode = GetOptionsMgr()->GetBool(OPT_DIRVIEW_SXS_THIN_GUTTER);
+
+	if (bThinMode)
+	{
+		// Thin mode: draw a single vertical line centered in the gutter
+		int cx = rcClient.Width() / 2;
+		CPen pen(PS_SOLID, 1, BcGutterColors::BORDER);
+		CPen* pOldPen = pDC->SelectObject(&pen);
+		pDC->MoveTo(cx, rcClient.top);
+		pDC->LineTo(cx, rcClient.bottom);
+		pDC->SelectObject(pOldPen);
+		return;
+	}
+
+	// Classic mode: draw per-row symbols
 
 	// Get item height from left pane list control if not set
 	CDirPaneView *pLeftPane = m_pCoordinator->GetLeftPaneView();
@@ -149,7 +176,7 @@ void CDirGutterView::OnDraw(CDC* pDC)
 
 		// Determine symbol and color
 		const tchar_t *symbol = _T("");
-		COLORREF clrSymbol = RGB(0, 0, 0);
+		COLORREF clrSymbol = BcGutterColors::TEXT_SAME;
 
 		if (di.isEmpty())
 		{
@@ -158,7 +185,7 @@ void CDirGutterView::OnDraw(CDC* pDC)
 		else if (di.diffcode.isResultFiltered())
 		{
 			symbol = _T("~");
-			clrSymbol = RGB(128, 128, 128);
+			clrSymbol = BcGutterColors::TEXT_FILTER;
 		}
 		else if (!IsItemExistAll(*pCtxt, di))
 		{
@@ -166,18 +193,18 @@ void CDirGutterView::OnDraw(CDC* pDC)
 			if (di.diffcode.exists(0) && !di.diffcode.exists(pCtxt->GetCompareDirs() - 1))
 			{
 				symbol = _T("\x2192"); // rightward arrow (exists on left only)
-				clrSymbol = RGB(128, 0, 128);
+				clrSymbol = BcGutterColors::TEXT_ORPHAN;
 			}
 			else
 			{
 				symbol = _T("\x2190"); // leftward arrow (exists on right only)
-				clrSymbol = RGB(128, 0, 128);
+				clrSymbol = BcGutterColors::TEXT_ORPHAN;
 			}
 		}
 		else if (di.diffcode.isResultSame())
 		{
 			symbol = _T("=");
-			clrSymbol = RGB(0, 128, 0);
+			clrSymbol = BcGutterColors::TEXT_SAME;
 		}
 		else if (di.diffcode.isResultDiff())
 		{
@@ -190,17 +217,17 @@ void CDirGutterView::OnDraw(CDC* pDC)
 			if (diff > toleranceUs)
 			{
 				symbol = _T("\x226B"); // much greater than (newer left)
-				clrSymbol = RGB(192, 0, 0);
+				clrSymbol = BcGutterColors::TEXT_DIFF;
 			}
 			else if (diff < -toleranceUs)
 			{
 				symbol = _T("\x226A"); // much less than (newer right)
-				clrSymbol = RGB(192, 0, 0);
+				clrSymbol = BcGutterColors::TEXT_DIFF;
 			}
 			else
 			{
 				symbol = _T("\x2260"); // not equal
-				clrSymbol = RGB(192, 0, 0);
+				clrSymbol = BcGutterColors::TEXT_DIFF;
 			}
 		}
 

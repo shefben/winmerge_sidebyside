@@ -1143,6 +1143,8 @@
     <ClCompile Include="DirSideBySideCoordinator.cpp" />
     <ClCompile Include="DirSideBySideHeaderBar.cpp" />
     <ClCompile Include="DirSideBySideFilterBar.cpp" />
+    <ClCompile Include="DirSxSToolBar.cpp" />
+    <ClCompile Include="DirSxSSessionDlg.cpp" />
     <ClCompile Include="DirGutterView.cpp" />
     <ClCompile Include="DirItem.cpp">
       <PrecompiledHeader>Use</PrecompiledHeader>
@@ -1593,6 +1595,8 @@
     <ClInclude Include="DirSideBySideCoordinator.h" />
     <ClInclude Include="DirSideBySideHeaderBar.h" />
     <ClInclude Include="DirSideBySideFilterBar.h" />
+    <ClInclude Include="DirSxSToolBar.h" />
+    <ClInclude Include="DirSxSSessionDlg.h" />
     <ClInclude Include="DirGutterView.h" />
     <ClInclude Include="DirItem.h" />
     <ClInclude Include="DirReportTypes.h" />

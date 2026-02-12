@@ -2172,3 +2172,57 @@ String DirViewColItems::SaveColumnOrders()
 	assert(static_cast<int>(m_invcolorder.size()) == m_numcols);
 	return strutils::join<String (*)(int)>(m_colorder.begin(), m_colorder.end(), _T(" "), strutils::to_str);
 }
+
+/**
+ * @brief Find a column's logical index by its registry name.
+ * @param [in] regName Registry name to search for (e.g. "Name", "LsizeShort").
+ * @return Logical column index, or -1 if not found.
+ */
+int DirViewColItems::FindColByRegName(const tchar_t* regName) const
+{
+	for (int i = 0; i < m_numcols; ++i)
+	{
+		if (lstrcmp(m_cols[i].regName, regName) == 0)
+			return i;
+	}
+	return -1;
+}
+
+/**
+ * @brief Configure this column set for SxS mode, showing only 4 columns
+ * appropriate for the given pane: Name, Ext, Size (short), Modified.
+ * @param [in] paneIndex 0=left pane, 1=right pane.
+ */
+void DirViewColItems::SetSxSPaneColumns(int paneIndex)
+{
+	// Column registry names for each pane
+	const tchar_t* sizeCol = (paneIndex == 0) ? _T("LsizeShort") : _T("RsizeShort");
+	const tchar_t* timeCol = (paneIndex == 0) ? _T("Lmtime") : _T("Rmtime");
+
+	int idxName = FindColByRegName(_T("Name"));
+	int idxExt  = FindColByRegName(_T("Ext"));
+	int idxSize = FindColByRegName(sizeCol);
+	int idxTime = FindColByRegName(timeCol);
+
+	// Reset all columns to hidden
+	ClearColumnOrders();
+	m_dispcols = 0;
+
+	// Assign physical indices 0-3 to our 4 columns
+	struct { int logIdx; int phyIdx; } mapping[] = {
+		{ idxName, 0 },
+		{ idxExt,  1 },
+		{ idxSize, 2 },
+		{ idxTime, 3 },
+	};
+
+	for (const auto& m : mapping)
+	{
+		if (m.logIdx >= 0 && m.logIdx < m_numcols)
+		{
+			m_colorder[m.logIdx] = m.phyIdx;
+			m_invcolorder[m.phyIdx] = m.logIdx;
+			++m_dispcols;
+		}
+	}
+}

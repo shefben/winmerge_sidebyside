@@ -26,6 +26,7 @@
 #include <Shlwapi.h>
 #include <Poco/DateTime.h>
 #include <algorithm>
+#include <unordered_map>
 #include <Aclapi.h>
 
 #pragma comment(lib, "version.lib")
@@ -39,7 +40,9 @@ CDirSideBySideCoordinator::CDirSideBySideCoordinator(CDirDoc *pDoc)
 	, m_statusCounts{}
 	, m_nSortColumn(-1)
 	, m_bSortAscending(true)
+	, m_bAlwaysShowFolders(true)
 	, m_bIgnoreFolderStructure(false)
+	, m_bAutoExpandApplied(false)
 	, m_bScanningInProgress(false)
 	, m_advFilter{ _T(""), _T(""), -1, -1, _T("") }
 {
@@ -119,6 +122,14 @@ void CDirSideBySideCoordinator::BuildRowMappingChildren(DIFFITEM *diffpos, int l
 	bool bFlattenMode = GetOptionsMgr()->GetBool(OPT_DIRVIEW_SXS_FLATTEN_MODE);
 	bool bSuppressFilters = GetOptionsMgr()->GetBool(OPT_DIRVIEW_SXS_SUPPRESS_FILTERS);
 	bool bHasNameFilter = !m_sNameFilter.empty();
+	// Include/exclude filter patterns from session settings
+	String sIncludeFiles = GetOptionsMgr()->GetString(OPT_DIRVIEW_SXS_INCLUDE_FILES);
+	String sExcludeFiles = GetOptionsMgr()->GetString(OPT_DIRVIEW_SXS_EXCLUDE_FILES);
+	String sIncludeFolders = GetOptionsMgr()->GetString(OPT_DIRVIEW_SXS_INCLUDE_FOLDERS);
+	String sExcludeFolders = GetOptionsMgr()->GetString(OPT_DIRVIEW_SXS_EXCLUDE_FOLDERS);
+	bool bHasIncExcFilter = !sExcludeFiles.empty() || !sExcludeFolders.empty()
+		|| (sIncludeFiles != _T("*.*") && !sIncludeFiles.empty())
+		|| (sIncludeFolders != _T("*") && !sIncludeFolders.empty());
 
 	while (diffpos != nullptr)
 	{
@@ -151,6 +162,51 @@ void CDirSideBySideCoordinator::BuildRowMappingChildren(DIFFITEM *diffpos, int l
 		if (!di.diffcode.isDirectory() && !PassesAdvancedFilter(di))
 			continue;
 
+		// Apply include/exclude patterns from Name Filters tab
+		if (!bSuppressFilters && bHasIncExcFilter)
+		{
+			String filename;
+			for (int s = 0; s < ctxt.GetCompareDirs(); s++)
+			{
+				if (di.diffcode.exists(s))
+				{
+					filename = di.diffFileInfo[s].filename;
+					break;
+				}
+			}
+			if (!filename.empty())
+			{
+				if (di.diffcode.isDirectory())
+				{
+					// Check folder include/exclude
+					if (!sIncludeFolders.empty() && sIncludeFolders != _T("*"))
+					{
+						if (!PathMatchSpec(filename.c_str(), sIncludeFolders.c_str()))
+							continue;
+					}
+					if (!sExcludeFolders.empty())
+					{
+						if (PathMatchSpec(filename.c_str(), sExcludeFolders.c_str()))
+							continue;
+					}
+				}
+				else
+				{
+					// Check file include/exclude
+					if (!sIncludeFiles.empty() && sIncludeFiles != _T("*.*"))
+					{
+						if (!PathMatchSpec(filename.c_str(), sIncludeFiles.c_str()))
+							continue;
+					}
+					if (!sExcludeFiles.empty())
+					{
+						if (PathMatchSpec(filename.c_str(), sExcludeFiles.c_str()))
+							continue;
+					}
+				}
+			}
+		}
+
 		if (bFlattenMode)
 		{
 			// In flatten mode: skip directories, recurse into all children
@@ -172,8 +228,11 @@ void CDirSideBySideCoordinator::BuildRowMappingChildren(DIFFITEM *diffpos, int l
 		else
 		{
 			// Normal mode
-			// For non-recursive mode, skip directories that exist on all sides
-			if (!ctxt.m_bRecursive && di.diffcode.isDirectory() && di.diffcode.existAll())
+			// Show directories that exist on all sides (they are navigable tree nodes)
+			// Only skip if "Always Show Folders" is off AND we're not in recursive mode
+			// AND the directory has no children to display
+			if (!ctxt.m_bRecursive && di.diffcode.isDirectory() && di.diffcode.existAll()
+				&& !m_bAlwaysShowFolders && !di.HasChildren())
 				continue;
 
 			SideBySideRowItem rowItem;
@@ -198,6 +257,7 @@ void CDirSideBySideCoordinator::BuildRowMappingChildren(DIFFITEM *diffpos, int l
  */
 void CDirSideBySideCoordinator::Redisplay()
 {
+	InvalidateFolderStatusCache();
 	BuildRowMapping();
 	UpdateStatusCounts();
 
@@ -236,6 +296,11 @@ FolderContentStatus CDirSideBySideCoordinator::ComputeFolderContentStatus(const 
 {
 	if (!di.HasChildren() || !m_pDoc || !m_pDoc->HasDiffs())
 		return FOLDER_STATUS_UNKNOWN;
+
+	// Check cache first — avoids expensive recursive tree walks on every draw
+	auto it = m_folderStatusCache.find(&di);
+	if (it != m_folderStatusCache.end())
+		return it->second;
 
 	const CDiffContext &ctxt = m_pDoc->GetDiffContext();
 
@@ -285,14 +350,18 @@ FolderContentStatus CDirSideBySideCoordinator::ComputeFolderContentStatus(const 
 	}
 
 	int flags = (hasSame ? 1 : 0) | (hasDiff ? 2 : 0) | (hasUnique ? 4 : 0);
+	FolderContentStatus result;
 	switch (flags)
 	{
-	case 0: return FOLDER_STATUS_UNKNOWN;
-	case 1: return FOLDER_STATUS_ALL_SAME;
-	case 2: return FOLDER_STATUS_ALL_DIFFERENT;
-	case 4: return FOLDER_STATUS_UNIQUE_ONLY;
-	default: return FOLDER_STATUS_MIXED;
+	case 0: result = FOLDER_STATUS_UNKNOWN; break;
+	case 1: result = FOLDER_STATUS_ALL_SAME; break;
+	case 2: result = FOLDER_STATUS_ALL_DIFFERENT; break;
+	case 4: result = FOLDER_STATUS_UNIQUE_ONLY; break;
+	default: result = FOLDER_STATUS_MIXED; break;
 	}
+
+	m_folderStatusCache[&di] = result;
+	return result;
 }
 
 /**
@@ -1223,7 +1292,7 @@ bool CDirSideBySideCoordinator::PassesAdvancedFilter(const DIFFITEM& di) const
 	if (!m_advFilter.dateFrom.empty())
 	{
 		int year = 0, month = 0, day = 0;
-		if (_stscanf(m_advFilter.dateFrom.c_str(), _T("%d-%d-%d"), &year, &month, &day) == 3)
+		if (_stscanf_s(m_advFilter.dateFrom.c_str(), _T("%d-%d-%d"), &year, &month, &day) == 3)
 		{
 			try
 			{
@@ -1257,7 +1326,7 @@ bool CDirSideBySideCoordinator::PassesAdvancedFilter(const DIFFITEM& di) const
 	if (!m_advFilter.dateTo.empty())
 	{
 		int year = 0, month = 0, day = 0;
-		if (_stscanf(m_advFilter.dateTo.c_str(), _T("%d-%d-%d"), &year, &month, &day) == 3)
+		if (_stscanf_s(m_advFilter.dateTo.c_str(), _T("%d-%d-%d"), &year, &month, &day) == 3)
 		{
 			try
 			{
@@ -1468,44 +1537,38 @@ void CDirSideBySideCoordinator::BuildRowMappingIgnoreStructure()
 		m_rowMapping.push_back(rowItem);
 	}
 
-	// Try to match left-only and right-only files by filename
+	// Match left-only and right-only files by filename using hash map (O(n) instead of O(n²))
+	std::unordered_map<String, size_t> rightByName;
+	rightByName.reserve(rightFiles.size());
+	for (size_t ri = 0; ri < rightFiles.size(); ri++)
+		rightByName[rightFiles[ri].filename] = ri;
+
 	std::vector<bool> rightMatched(rightFiles.size(), false);
 
 	for (size_t li = 0; li < leftFiles.size(); li++)
 	{
-		bool matched = false;
-		for (size_t ri = 0; ri < rightFiles.size(); ri++)
+		auto it = rightByName.find(leftFiles[li].filename);
+		if (it != rightByName.end() && !rightMatched[it->second])
 		{
-			if (rightMatched[ri])
-				continue;
+			size_t ri = it->second;
+			// Match found — add both as a paired row
+			SideBySideRowItem rowItem;
+			rowItem.diffpos = leftFiles[li].diffpos;
+			rowItem.existsOnLeft = true;
+			rowItem.existsOnRight = false; // Still orphan in the DIFFITEM sense
+			rowItem.indent = 0;
+			m_rowMapping.push_back(rowItem);
 
-			if (leftFiles[li].filename == rightFiles[ri].filename)
-			{
-				// Match found — add both as a paired row using the left item
-				// (In a real implementation we'd need to create a merged DIFFITEM,
-				// but for now we use the left-side item with both flags)
-				SideBySideRowItem rowItem;
-				rowItem.diffpos = leftFiles[li].diffpos;
-				rowItem.existsOnLeft = true;
-				rowItem.existsOnRight = false; // Still orphan in the DIFFITEM sense
-				rowItem.indent = 0;
-				m_rowMapping.push_back(rowItem);
+			SideBySideRowItem rowItemRight;
+			rowItemRight.diffpos = rightFiles[ri].diffpos;
+			rowItemRight.existsOnLeft = false;
+			rowItemRight.existsOnRight = true;
+			rowItemRight.indent = 0;
+			m_rowMapping.push_back(rowItemRight);
 
-				// Add the right match immediately after
-				SideBySideRowItem rowItemRight;
-				rowItemRight.diffpos = rightFiles[ri].diffpos;
-				rowItemRight.existsOnLeft = false;
-				rowItemRight.existsOnRight = true;
-				rowItemRight.indent = 0;
-				m_rowMapping.push_back(rowItemRight);
-
-				rightMatched[ri] = true;
-				matched = true;
-				break;
-			}
+			rightMatched[ri] = true;
 		}
-
-		if (!matched)
+		else
 		{
 			// Left-only orphan
 			SideBySideRowItem rowItem;
@@ -1688,8 +1751,6 @@ void CDirSideBySideCoordinator::ApplyAutoExpand()
 			}
 		}
 	}
-
-	Redisplay();
 }
 
 /**

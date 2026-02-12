@@ -82,6 +82,8 @@ public:
 	String SaveColumnOrders();
 	const std::vector<String>& GetAdditionalPropertyNames() const { return m_additionalPropertyNames; }
 	void SetAdditionalPropertyNames(const std::vector<String>& propertyNames);
+	void SetSxSPaneColumns(int paneIndex);
+	int FindColByRegName(const tchar_t* regName) const;
 
 	/// Update all column widths (from registry to screen)
 	// Necessary when user reorders columns
