@@ -15,6 +15,7 @@
 #include "DarkModeLib.h"
 #include "paths.h"
 #include "resource.h"
+#include <windowsx.h>
 #include <uxtheme.h>
 #pragma comment(lib, "uxtheme.lib")
 
@@ -22,21 +23,28 @@
 #define new DEBUG_NEW
 #endif
 
-// Beyond Compare dark theme colors
+static bool IsSystemDarkMode()
+{
+	COLORREF bg = ::GetSysColor(COLOR_WINDOW);
+	int luminance = (GetRValue(bg) * 299 + GetGValue(bg) * 587 + GetBValue(bg) * 114) / 1000;
+	return luminance < 128;
+}
+
+// Theme-aware colors for header bar
 namespace BcHdr
 {
-	static const COLORREF BG        = RGB(43, 43, 43);   // toolbar background
-	static const COLORREF COMBO_BG  = RGB(30, 30, 30);   // combo edit background
-	static const COLORREF TEXT      = RGB(200, 200, 200); // text
-	static const COLORREF BTN_BG   = RGB(50, 50, 50);    // button face
-	static const COLORREF BTN_HOT  = RGB(65, 65, 65);    // button hover
-	static const COLORREF BTN_PRESS= RGB(35, 35, 35);    // button pressed
-	static const COLORREF BTN_BORDER = RGB(65, 65, 65);  // button border
-	static const COLORREF ICON     = RGB(170, 170, 170);  // icon lines
+	static COLORREF BG()        { return IsSystemDarkMode() ? RGB(43, 43, 43) : ::GetSysColor(COLOR_BTNFACE); }
+	static COLORREF COMBO_BG()  { return IsSystemDarkMode() ? RGB(30, 30, 30) : ::GetSysColor(COLOR_WINDOW); }
+	static COLORREF FG_TEXT()   { return IsSystemDarkMode() ? RGB(200, 200, 200) : ::GetSysColor(COLOR_WINDOWTEXT); }
+	static COLORREF BTN_BG()   { return IsSystemDarkMode() ? RGB(50, 50, 50) : ::GetSysColor(COLOR_BTNFACE); }
+	static COLORREF BTN_HOT()  { return IsSystemDarkMode() ? RGB(65, 65, 65) : ::GetSysColor(COLOR_BTNHIGHLIGHT); }
+	static COLORREF BTN_PRESS(){ return IsSystemDarkMode() ? RGB(35, 35, 35) : ::GetSysColor(COLOR_BTNSHADOW); }
+	static COLORREF BTN_BORDER(){ return IsSystemDarkMode() ? RGB(65, 65, 65) : ::GetSysColor(COLOR_BTNSHADOW); }
+	static COLORREF ICON()     { return IsSystemDarkMode() ? RGB(170, 170, 170) : ::GetSysColor(COLOR_BTNTEXT); }
 }
 
 // Icon type constants for DrawIconButton
-enum { ICON_BACK = 0, ICON_BROWSE = 1, ICON_UPLEVEL = 2 };
+enum { ICON_BACK = 0, ICON_FORWARD = 1, ICON_UPLEVEL = 2, ICON_BROWSE = 3, ICON_UPLEVEL_BOTH = 4 };
 
 // Control IDs
 #define IDC_SXS_COMBO_LEFT     9801
@@ -47,6 +55,9 @@ enum { ICON_BACK = 0, ICON_BROWSE = 1, ICON_UPLEVEL = 2 };
 #define IDC_SXS_BROWSE_RIGHT   9806
 #define IDC_SXS_UPLEVEL_LEFT   9807
 #define IDC_SXS_UPLEVEL_RIGHT  9808
+#define IDC_SXS_FORWARD_LEFT   9809
+#define IDC_SXS_FORWARD_RIGHT  9810
+#define IDC_SXS_UPLEVEL_BOTH   9811
 
 // Bar height
 static const int BAR_HEIGHT = 24;
@@ -59,23 +70,17 @@ BEGIN_MESSAGE_MAP(CDirSideBySideHeaderBar, CDialogBar)
 	ON_WM_ERASEBKGND()
 	ON_WM_CTLCOLOR()
 	ON_WM_DRAWITEM()
-	ON_CONTROL_RANGE(CBN_SELCHANGE, IDC_SXS_COMBO_LEFT, IDC_SXS_COMBO_RIGHT, OnComboSelChange)
-	ON_BN_CLICKED(IDC_SXS_BACK_LEFT, OnBackLeft)
-	ON_BN_CLICKED(IDC_SXS_BACK_RIGHT, OnBackRight)
-	ON_BN_CLICKED(IDC_SXS_BROWSE_LEFT, OnBrowseLeft)
-	ON_BN_CLICKED(IDC_SXS_BROWSE_RIGHT, OnBrowseRight)
-	ON_BN_CLICKED(IDC_SXS_UPLEVEL_LEFT, OnUpLevelLeft)
-	ON_BN_CLICKED(IDC_SXS_UPLEVEL_RIGHT, OnUpLevelRight)
 END_MESSAGE_MAP()
 
 CDirSideBySideHeaderBar::CDirSideBySideHeaderBar()
 	: m_nPanes(2)
 	, m_nActivePane(-1)
+	, m_hWndHotButton(nullptr)
 {
 	m_pDropHandlers[0] = nullptr;
 	m_pDropHandlers[1] = nullptr;
-	m_brDarkBg.CreateSolidBrush(BcHdr::BG);
-	m_brDarkEdit.CreateSolidBrush(BcHdr::COMBO_BG);
+	m_brDarkBg.CreateSolidBrush(BcHdr::BG());
+	m_brDarkEdit.CreateSolidBrush(BcHdr::COMBO_BG());
 }
 
 CDirSideBySideHeaderBar::~CDirSideBySideHeaderBar()
@@ -101,15 +106,22 @@ void CDirSideBySideHeaderBar::DrawIconButton(LPDRAWITEMSTRUCT lpDIS, int iconTyp
 	HDC hDC = lpDIS->hDC;
 	RECT rc = lpDIS->rcItem;
 	bool bPressed = (lpDIS->itemState & ODS_SELECTED) != 0;
+	bool bHot = (lpDIS->hwndItem == m_hWndHotButton);
 
-	// Background
-	COLORREF bg = bPressed ? BcHdr::BTN_PRESS : BcHdr::BTN_BG;
+	// Background — 3-state: pressed > hover > normal
+	COLORREF bg;
+	if (bPressed)
+		bg = BcHdr::BTN_PRESS();
+	else if (bHot)
+		bg = BcHdr::BTN_HOT();
+	else
+		bg = BcHdr::BTN_BG();
 	HBRUSH hBr = CreateSolidBrush(bg);
 	FillRect(hDC, &rc, hBr);
 	DeleteObject(hBr);
 
 	// Border
-	HPEN hPen = CreatePen(PS_SOLID, 1, BcHdr::BTN_BORDER);
+	HPEN hPen = CreatePen(PS_SOLID, 1, BcHdr::BTN_BORDER());
 	HPEN hOld = (HPEN)SelectObject(hDC, hPen);
 	HBRUSH hNull = (HBRUSH)GetStockObject(NULL_BRUSH);
 	HBRUSH hOldBr = (HBRUSH)SelectObject(hDC, hNull);
@@ -124,7 +136,7 @@ void CDirSideBySideHeaderBar::DrawIconButton(LPDRAWITEMSTRUCT lpDIS, int iconTyp
 	int mx = rc.left + cx / 2;
 	int my = rc.top + cy / 2;
 
-	HPEN hIconPen = CreatePen(PS_SOLID, 2, BcHdr::ICON);
+	HPEN hIconPen = CreatePen(PS_SOLID, 2, BcHdr::ICON());
 	SelectObject(hDC, hIconPen);
 
 	switch (iconType)
@@ -140,10 +152,21 @@ void CDirSideBySideHeaderBar::DrawIconButton(LPDRAWITEMSTRUCT lpDIS, int iconTyp
 		}
 		break;
 
+	case ICON_FORWARD:
+		// Right-pointing arrow: > shape
+		{
+			int sz = 4;
+			MoveToEx(hDC, mx - sz, my - sz, nullptr);
+			LineTo(hDC, mx + sz - 1, my);
+			MoveToEx(hDC, mx + sz - 1, my, nullptr);
+			LineTo(hDC, mx - sz, my + sz);
+		}
+		break;
+
 	case ICON_BROWSE:
 		// Folder icon: simple folder outline
 		{
-			HPEN hFolderPen = CreatePen(PS_SOLID, 1, BcHdr::ICON);
+			HPEN hFolderPen = CreatePen(PS_SOLID, 1, BcHdr::ICON());
 			HPEN hPrev = (HPEN)SelectObject(hDC, hFolderPen);
 			HBRUSH hFolderBr = CreateSolidBrush(RGB(180, 160, 80));
 			HBRUSH hPrevBr = (HBRUSH)SelectObject(hDC, hFolderBr);
@@ -174,6 +197,23 @@ void CDirSideBySideHeaderBar::DrawIconButton(LPDRAWITEMSTRUCT lpDIS, int iconTyp
 			LineTo(hDC, mx, my + sz);
 		}
 		break;
+
+	case ICON_UPLEVEL_BOTH:
+		// Double up arrow: two ^ shapes stacked
+		{
+			int sz = 3;
+			// Top arrow head
+			MoveToEx(hDC, mx - sz, my - 1, nullptr);
+			LineTo(hDC, mx, my - sz - 1);
+			MoveToEx(hDC, mx, my - sz - 1, nullptr);
+			LineTo(hDC, mx + sz, my - 1);
+			// Bottom arrow head
+			MoveToEx(hDC, mx - sz, my + 4, nullptr);
+			LineTo(hDC, mx, my + 1);
+			MoveToEx(hDC, mx, my + 1, nullptr);
+			LineTo(hDC, mx + sz, my + 4);
+		}
+		break;
 	}
 
 	SelectObject(hDC, GetStockObject(BLACK_PEN));
@@ -185,6 +225,9 @@ BOOL CDirSideBySideHeaderBar::Create(CWnd* pParentWnd)
 	if (!__super::Create(pParentWnd, CDirSideBySideHeaderBar::IDD,
 		CBRS_ALIGN_TOP | CBRS_TOOLTIPS | CBRS_FLYBY, AFX_IDW_CONTROLBAR_FIRST + 28))
 		return FALSE;
+
+	// Reduce flicker during resize by clipping children
+	ModifyStyle(0, WS_CLIPCHILDREN | WS_CLIPSIBLINGS);
 
 	// Hide the template CFilepathEdit controls — we create our own combos
 	for (UINT id = IDC_STATIC_TITLE_PANE0; id <= IDC_STATIC_TITLE_PANE2; id++)
@@ -204,10 +247,12 @@ BOOL CDirSideBySideHeaderBar::Create(CWnd* pParentWnd)
 	m_btnFont.CreateFontIndirect(&ncm.lfStatusFont);
 
 	// Create combo boxes and buttons for each pane
-	UINT comboIDs[2] = { IDC_SXS_COMBO_LEFT, IDC_SXS_COMBO_RIGHT };
-	UINT backIDs[2]  = { IDC_SXS_BACK_LEFT,  IDC_SXS_BACK_RIGHT };
-	UINT browseIDs[2] = { IDC_SXS_BROWSE_LEFT, IDC_SXS_BROWSE_RIGHT };
-	UINT upIDs[2]    = { IDC_SXS_UPLEVEL_LEFT, IDC_SXS_UPLEVEL_RIGHT };
+	// Button order (BC layout): [Combo] [Back] [Forward] [Up] [Browse]
+	UINT comboIDs[2]   = { IDC_SXS_COMBO_LEFT,   IDC_SXS_COMBO_RIGHT };
+	UINT backIDs[2]    = { IDC_SXS_BACK_LEFT,    IDC_SXS_BACK_RIGHT };
+	UINT forwardIDs[2] = { IDC_SXS_FORWARD_LEFT, IDC_SXS_FORWARD_RIGHT };
+	UINT upIDs[2]      = { IDC_SXS_UPLEVEL_LEFT, IDC_SXS_UPLEVEL_RIGHT };
+	UINT browseIDs[2]  = { IDC_SXS_BROWSE_LEFT,  IDC_SXS_BROWSE_RIGHT };
 
 	for (int pane = 0; pane < 2; pane++)
 	{
@@ -216,26 +261,34 @@ BOOL CDirSideBySideHeaderBar::Create(CWnd* pParentWnd)
 			WS_CHILD | WS_VISIBLE | CBS_DROPDOWN | CBS_AUTOHSCROLL | WS_VSCROLL,
 			CRect(0, 0, 200, BAR_HEIGHT + 200), this, comboIDs[pane]);
 		m_comboPath[pane].SetFont(&m_font);
-		SetWindowTheme(m_comboPath[pane].m_hWnd, L"", L"");
+		if (IsSystemDarkMode())
+			SetWindowTheme(m_comboPath[pane].m_hWnd, L"", L"");
 
 		// Back button (owner-drawn)
 		m_btnBack[pane].Create(_T(""),
 			WS_CHILD | WS_VISIBLE | BS_PUSHBUTTON | BS_OWNERDRAW,
 			CRect(0, 0, BTN_W, BAR_HEIGHT), this, backIDs[pane]);
-		SetWindowTheme(m_btnBack[pane].m_hWnd, L"", L"");
 
-		// Browse button (owner-drawn)
-		m_btnBrowse[pane].Create(_T(""),
+		// Forward button (owner-drawn)
+		m_btnForward[pane].Create(_T(""),
 			WS_CHILD | WS_VISIBLE | BS_PUSHBUTTON | BS_OWNERDRAW,
-			CRect(0, 0, BTN_W, BAR_HEIGHT), this, browseIDs[pane]);
-		SetWindowTheme(m_btnBrowse[pane].m_hWnd, L"", L"");
+			CRect(0, 0, BTN_W, BAR_HEIGHT), this, forwardIDs[pane]);
 
 		// Up-level button (owner-drawn)
 		m_btnUpLevel[pane].Create(_T(""),
 			WS_CHILD | WS_VISIBLE | BS_PUSHBUTTON | BS_OWNERDRAW,
 			CRect(0, 0, BTN_W, BAR_HEIGHT), this, upIDs[pane]);
-		SetWindowTheme(m_btnUpLevel[pane].m_hWnd, L"", L"");
+
+		// Browse button (owner-drawn)
+		m_btnBrowse[pane].Create(_T(""),
+			WS_CHILD | WS_VISIBLE | BS_PUSHBUTTON | BS_OWNERDRAW,
+			CRect(0, 0, BTN_W, BAR_HEIGHT), this, browseIDs[pane]);
 	}
+
+	// Center "Up Both" button (between panes)
+	m_btnUpLevelBoth.Create(_T(""),
+		WS_CHILD | WS_VISIBLE | BS_PUSHBUTTON | BS_OWNERDRAW,
+		CRect(0, 0, BTN_W, BAR_HEIGHT), this, IDC_SXS_UPLEVEL_BOTH);
 
 	// Register drop targets on each combo's edit area
 	for (int pane = 0; pane < 2; pane++)
@@ -257,7 +310,7 @@ BOOL CDirSideBySideHeaderBar::OnEraseBkgnd(CDC* pDC)
 {
 	CRect rc;
 	GetClientRect(&rc);
-	pDC->FillSolidRect(&rc, BcHdr::BG);
+	pDC->FillSolidRect(&rc, BcHdr::BG());
 	return TRUE;
 }
 
@@ -271,8 +324,8 @@ HBRUSH CDirSideBySideHeaderBar::OnCtlColor(CDC* pDC, CWnd* pWnd, UINT nCtlColor)
 			CWnd* pParent = pWnd->GetParent();
 			if (pParent && pParent->GetSafeHwnd() == m_comboPath[pane].GetSafeHwnd())
 			{
-				pDC->SetBkColor(BcHdr::COMBO_BG);
-				pDC->SetTextColor(BcHdr::TEXT);
+				pDC->SetBkColor(BcHdr::COMBO_BG());
+				pDC->SetTextColor(BcHdr::FG_TEXT());
 				return (HBRUSH)m_brDarkEdit.GetSafeHandle();
 			}
 		}
@@ -280,8 +333,8 @@ HBRUSH CDirSideBySideHeaderBar::OnCtlColor(CDC* pDC, CWnd* pWnd, UINT nCtlColor)
 	// Dark theme for the dropdown list
 	if (nCtlColor == CTLCOLOR_LISTBOX)
 	{
-		pDC->SetBkColor(BcHdr::COMBO_BG);
-		pDC->SetTextColor(BcHdr::TEXT);
+		pDC->SetBkColor(BcHdr::COMBO_BG());
+		pDC->SetTextColor(BcHdr::FG_TEXT());
 		return (HBRUSH)m_brDarkEdit.GetSafeHandle();
 	}
 	return __super::OnCtlColor(pDC, pWnd, nCtlColor);
@@ -295,6 +348,10 @@ void CDirSideBySideHeaderBar::OnDrawItem(int nIDCtl, LPDRAWITEMSTRUCT lpDIS)
 	case IDC_SXS_BACK_RIGHT:
 		DrawIconButton(lpDIS, ICON_BACK);
 		return;
+	case IDC_SXS_FORWARD_LEFT:
+	case IDC_SXS_FORWARD_RIGHT:
+		DrawIconButton(lpDIS, ICON_FORWARD);
+		return;
 	case IDC_SXS_BROWSE_LEFT:
 	case IDC_SXS_BROWSE_RIGHT:
 		DrawIconButton(lpDIS, ICON_BROWSE);
@@ -302,6 +359,9 @@ void CDirSideBySideHeaderBar::OnDrawItem(int nIDCtl, LPDRAWITEMSTRUCT lpDIS)
 	case IDC_SXS_UPLEVEL_LEFT:
 	case IDC_SXS_UPLEVEL_RIGHT:
 		DrawIconButton(lpDIS, ICON_UPLEVEL);
+		return;
+	case IDC_SXS_UPLEVEL_BOTH:
+		DrawIconButton(lpDIS, ICON_UPLEVEL_BOTH);
 		return;
 	}
 	__super::OnDrawItem(nIDCtl, lpDIS);
@@ -331,8 +391,8 @@ void CDirSideBySideHeaderBar::Resize(int widths[])
 /**
  * @brief Layout controls to match splitter column positions.
  *
- * Per-pane layout: [ComboBox][Back btn][Browse btn][Up btn]
- * The combo takes all available width minus 3*BTN_W for buttons.
+ * Per-pane layout (BC order): [ComboBox][Back][Forward][Up][Browse]
+ * The combo takes all available width minus 4*BTN_W for buttons.
  */
 void CDirSideBySideHeaderBar::Resize(int widths[], int offsets[])
 {
@@ -340,8 +400,14 @@ void CDirSideBySideHeaderBar::Resize(int widths[], int offsets[])
 		return;
 
 	const int comboH = BAR_HEIGHT;
-	const int btnCount = 3;
+	const int btnCount = 4;  // Back, Forward, Up, Browse
 	const int buttonsW = btnCount * BTN_W;
+
+	// Use DeferWindowPos for atomic repositioning (prevents flicker)
+	// m_nPanes * 5 controls + 1 center button
+	HDWP hDWP = ::BeginDeferWindowPos(m_nPanes * 5 + 1);
+	if (!hDWP)
+		return;
 
 	for (int pane = 0; pane < m_nPanes; pane++)
 	{
@@ -351,24 +417,50 @@ void CDirSideBySideHeaderBar::Resize(int widths[], int offsets[])
 		if (comboW < 80) comboW = 80;
 
 		if (m_comboPath[pane].GetSafeHwnd())
-			m_comboPath[pane].SetWindowPos(nullptr, x, PAD_Y, comboW, comboH + 200,
-				SWP_NOZORDER | SWP_NOACTIVATE);
+			hDWP = ::DeferWindowPos(hDWP, m_comboPath[pane].m_hWnd, nullptr,
+				x, PAD_Y, comboW, comboH + 200,
+				SWP_NOZORDER | SWP_NOACTIVATE | SWP_NOCOPYBITS);
 
 		int bx = x + comboW + 1;
 		if (m_btnBack[pane].GetSafeHwnd())
-			m_btnBack[pane].SetWindowPos(nullptr, bx, PAD_Y, BTN_W, comboH,
-				SWP_NOZORDER | SWP_NOACTIVATE);
+			hDWP = ::DeferWindowPos(hDWP, m_btnBack[pane].m_hWnd, nullptr,
+				bx, PAD_Y, BTN_W, comboH,
+				SWP_NOZORDER | SWP_NOACTIVATE | SWP_NOCOPYBITS);
 		bx += BTN_W;
-		if (m_btnBrowse[pane].GetSafeHwnd())
-			m_btnBrowse[pane].SetWindowPos(nullptr, bx, PAD_Y, BTN_W, comboH,
-				SWP_NOZORDER | SWP_NOACTIVATE);
+		if (m_btnForward[pane].GetSafeHwnd())
+			hDWP = ::DeferWindowPos(hDWP, m_btnForward[pane].m_hWnd, nullptr,
+				bx, PAD_Y, BTN_W, comboH,
+				SWP_NOZORDER | SWP_NOACTIVATE | SWP_NOCOPYBITS);
 		bx += BTN_W;
 		if (m_btnUpLevel[pane].GetSafeHwnd())
-			m_btnUpLevel[pane].SetWindowPos(nullptr, bx, PAD_Y, BTN_W, comboH,
-				SWP_NOZORDER | SWP_NOACTIVATE);
+			hDWP = ::DeferWindowPos(hDWP, m_btnUpLevel[pane].m_hWnd, nullptr,
+				bx, PAD_Y, BTN_W, comboH,
+				SWP_NOZORDER | SWP_NOACTIVATE | SWP_NOCOPYBITS);
+		bx += BTN_W;
+		if (m_btnBrowse[pane].GetSafeHwnd())
+			hDWP = ::DeferWindowPos(hDWP, m_btnBrowse[pane].m_hWnd, nullptr,
+				bx, PAD_Y, BTN_W, comboH,
+				SWP_NOZORDER | SWP_NOACTIVATE | SWP_NOCOPYBITS);
 	}
 
-	InvalidateRect(nullptr, FALSE);
+	// Position center "Up Both" button between the two panes
+	if (m_btnUpLevelBoth.GetSafeHwnd() && m_nPanes >= 2)
+	{
+		int centerX = offsets[1] - BTN_W;
+		if (centerX < offsets[0] + widths[0] - BTN_W)
+			centerX = offsets[0] + widths[0] - BTN_W;
+		// Center the button in the gap between left and right panes
+		int gap = offsets[1] - (offsets[0] + widths[0]);
+		if (gap >= BTN_W)
+			centerX = offsets[0] + widths[0] + (gap - BTN_W) / 2;
+		else
+			centerX = offsets[1] - BTN_W;
+		hDWP = ::DeferWindowPos(hDWP, m_btnUpLevelBoth.m_hWnd, nullptr,
+			centerX, PAD_Y, BTN_W, comboH,
+			SWP_NOZORDER | SWP_NOACTIVATE | SWP_NOCOPYBITS);
+	}
+
+	::EndDeferWindowPos(hDWP);
 }
 
 // --- IHeaderBar implementation ---
@@ -440,10 +532,12 @@ void CDirSideBySideHeaderBar::OnComboSelChange(UINT id)
 
 // --- Button handlers ---
 
-void CDirSideBySideHeaderBar::OnBackLeft()   { if (m_backCallbackfunc)    m_backCallbackfunc(0); }
-void CDirSideBySideHeaderBar::OnBackRight()  { if (m_backCallbackfunc)    m_backCallbackfunc(1); }
-void CDirSideBySideHeaderBar::OnBrowseLeft() { if (m_browseCallbackfunc)  m_browseCallbackfunc(0); }
-void CDirSideBySideHeaderBar::OnBrowseRight(){ if (m_browseCallbackfunc)  m_browseCallbackfunc(1); }
+void CDirSideBySideHeaderBar::OnBackLeft()     { if (m_backCallbackfunc)    m_backCallbackfunc(0); }
+void CDirSideBySideHeaderBar::OnBackRight()    { if (m_backCallbackfunc)    m_backCallbackfunc(1); }
+void CDirSideBySideHeaderBar::OnForwardLeft()  { if (m_forwardCallbackfunc) m_forwardCallbackfunc(0); }
+void CDirSideBySideHeaderBar::OnForwardRight() { if (m_forwardCallbackfunc) m_forwardCallbackfunc(1); }
+void CDirSideBySideHeaderBar::OnBrowseLeft()   { if (m_browseCallbackfunc)  m_browseCallbackfunc(0); }
+void CDirSideBySideHeaderBar::OnBrowseRight()  { if (m_browseCallbackfunc)  m_browseCallbackfunc(1); }
 void CDirSideBySideHeaderBar::OnUpLevelLeft()  { if (m_upLevelCallbackfunc) m_upLevelCallbackfunc(0); }
 void CDirSideBySideHeaderBar::OnUpLevelRight() { if (m_upLevelCallbackfunc) m_upLevelCallbackfunc(1); }
 
@@ -470,13 +564,130 @@ void CDirSideBySideHeaderBar::AddPathToHistory(int pane, const String& sPath)
 	if (history.size() > 20)
 		history.resize(20);
 
-	// Update dropdown list
+	// Update dropdown list without clearing the edit text
 	if (m_comboPath[pane].GetSafeHwnd())
 	{
+		// Save the current edit text before resetting
+		CString curText;
+		m_comboPath[pane].GetWindowText(curText);
 		m_comboPath[pane].ResetContent();
 		for (const auto& path : history)
 			m_comboPath[pane].AddString(path.c_str());
+		// Restore the edit text (ResetContent clears it on CBS_DROPDOWN combos)
+		m_comboPath[pane].SetWindowText(curText);
 	}
+}
+
+// --- WindowProc: intercept WM_COMMAND before CControlBar routing ---
+
+LRESULT CDirSideBySideHeaderBar::WindowProc(UINT message, WPARAM wParam, LPARAM lParam)
+{
+	if (message == WM_COMMAND)
+	{
+		UINT nID = LOWORD(wParam);
+		int nCode = HIWORD(wParam);
+
+		// Handle button clicks
+		if (nCode == BN_CLICKED && lParam != 0)
+		{
+			switch (nID)
+			{
+			case IDC_SXS_BACK_LEFT:     OnBackLeft(); return 0;
+			case IDC_SXS_BACK_RIGHT:    OnBackRight(); return 0;
+			case IDC_SXS_FORWARD_LEFT:  OnForwardLeft(); return 0;
+			case IDC_SXS_FORWARD_RIGHT: OnForwardRight(); return 0;
+			case IDC_SXS_BROWSE_LEFT:   OnBrowseLeft(); return 0;
+			case IDC_SXS_BROWSE_RIGHT:  OnBrowseRight(); return 0;
+			case IDC_SXS_UPLEVEL_LEFT:  OnUpLevelLeft(); return 0;
+			case IDC_SXS_UPLEVEL_RIGHT: OnUpLevelRight(); return 0;
+			case IDC_SXS_UPLEVEL_BOTH:  OnUpLevelBoth(); return 0;
+			}
+		}
+
+		// Handle combo selection change
+		if (nCode == CBN_SELCHANGE)
+		{
+			if (nID == IDC_SXS_COMBO_LEFT || nID == IDC_SXS_COMBO_RIGHT)
+			{
+				OnComboSelChange(nID);
+				return 0;
+			}
+		}
+	}
+
+	// --- Hover tracking for owner-draw buttons ---
+	if (message == WM_MOUSEMOVE)
+	{
+		POINT pt = { GET_X_LPARAM(lParam), GET_Y_LPARAM(lParam) };
+		HWND hChild = ::ChildWindowFromPoint(m_hWnd, pt);
+		if (hChild != m_hWndHotButton)
+		{
+			if (m_hWndHotButton && ::IsWindow(m_hWndHotButton))
+				::InvalidateRect(m_hWndHotButton, nullptr, FALSE);
+			m_hWndHotButton = nullptr;
+			if (hChild && hChild != m_hWnd)
+			{
+				int id = ::GetDlgCtrlID(hChild);
+				if (id >= IDC_SXS_BACK_LEFT && id <= IDC_SXS_UPLEVEL_BOTH)
+				{
+					m_hWndHotButton = hChild;
+					::InvalidateRect(hChild, nullptr, FALSE);
+					TRACKMOUSEEVENT tme = { sizeof(tme), TME_LEAVE, m_hWnd, 0 };
+					TrackMouseEvent(&tme);
+				}
+			}
+		}
+	}
+	if (message == WM_MOUSELEAVE)
+	{
+		if (m_hWndHotButton && ::IsWindow(m_hWndHotButton))
+			::InvalidateRect(m_hWndHotButton, nullptr, FALSE);
+		m_hWndHotButton = nullptr;
+	}
+
+	return __super::WindowProc(message, wParam, lParam);
+}
+
+// --- PreTranslateMessage: handle Enter key in combo edit ---
+
+BOOL CDirSideBySideHeaderBar::PreTranslateMessage(MSG* pMsg)
+{
+	if (pMsg->message == WM_KEYDOWN && pMsg->wParam == VK_RETURN)
+	{
+		// Check if the focused window is a combo edit child
+		CWnd* pFocus = GetFocus();
+		if (pFocus)
+		{
+			for (int pane = 0; pane < m_nPanes; pane++)
+			{
+				if (!m_comboPath[pane].GetSafeHwnd())
+					continue;
+				// CBS_DROPDOWN has a child Edit control
+				CWnd* pEdit = m_comboPath[pane].GetWindow(GW_CHILD);
+				if (pEdit && pFocus->GetSafeHwnd() == pEdit->GetSafeHwnd())
+				{
+					CString text;
+					m_comboPath[pane].GetWindowText(text);
+					String sPath(text.GetString());
+					if (!sPath.empty() && m_folderSelectedCallbackfunc)
+						m_folderSelectedCallbackfunc(pane, sPath);
+					return TRUE;
+				}
+			}
+		}
+	}
+	return __super::PreTranslateMessage(pMsg);
+}
+
+// --- Up Both handler ---
+
+void CDirSideBySideHeaderBar::OnUpLevelBoth()
+{
+	// Navigate both sides up one level via dedicated callback
+	if (m_upBothCallbackfunc)
+		m_upBothCallbackfunc();
+	else if (m_upLevelCallbackfunc)
+		m_upLevelCallbackfunc(0); // fallback
 }
 
 // --- Drop handler ---

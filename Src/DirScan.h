@@ -20,3 +20,4 @@ int DirScan_UpdateMarkedItems(DiffFuncStruct *myStruct, DIFFITEM *parentdiffpos)
 
 int DirScan_CompareItems(DiffFuncStruct *, DIFFITEM *parentdiffpos);
 int DirScan_CompareRequestedItems(DiffFuncStruct *, DIFFITEM *parentdiffpos);
+void DirScan_GetItemsBFS(DiffFuncStruct *myStruct);

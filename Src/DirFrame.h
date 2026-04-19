@@ -15,14 +15,17 @@
 #include "DirSideBySideHeaderBar.h"
 #include "DirSideBySideFilterBar.h"
 #include "DirSxSToolBar.h"
+#include "DirSxSLogPanel.h"
 #include "BasicFlatStatusBar.h"
 #include "DirCompProgressBar.h"
 #include "DirFilterBar.h"
 #include "MergeFrameCommon.h"
 #include "Common/SplitterWndEx.h"
+#include <afxcmn.h>
 #include <memory>
 
 class CDirPaneView;
+class CDirSxSUnifiedView;
 class CDirSideBySideCoordinator;
 class CDirGutterView;
 
@@ -53,6 +56,10 @@ public:
 	void UpdateResources();
 	void ShowProgressBar();
 	void HideProgressBar();
+	void ShowScanProgressBar(bool bMarquee = false);
+	void HideScanProgressBar();
+	void UpdateScanProgressBar();
+	void SetScanProgressDeterminate();
 	void ShowFilterBar();
 	void HideFilterBar();
 	DirCompProgressBar* GetCompProgressBar() { return m_pCmpProgressBar.get(); }
@@ -60,9 +67,11 @@ public:
 
 	bool IsSideBySideMode() const { return m_bSideBySideMode; }
 	CDirSideBySideCoordinator* GetCoordinator() { return m_pCoordinator.get(); }
+	CDirSxSLogPanel& GetLogPanel() { return m_wndLogPanel; }
 	CDirPaneView* GetLeftPaneView() { return m_pLeftPaneView; }
 	CDirPaneView* GetRightPaneView() { return m_pRightPaneView; }
 	CDirGutterView* GetGutterView() { return m_pGutterView; }
+	CDirSxSUnifiedView* GetUnifiedView() { return m_pUnifiedView; }
 
 // Overrides
 	// ClassWizard generated virtual function overrides
@@ -78,6 +87,7 @@ protected:
 	CDirSideBySideHeaderBar m_wndSxSHeaderBar;
 	CDirSideBySideFilterBar m_wndSxSFilterBar;
 	CDirSxSToolBar m_wndSxSToolBar;
+	CDirSxSLogPanel m_wndLogPanel;
 	std::unique_ptr<DirCompProgressBar> m_pCmpProgressBar;
 	std::unique_ptr<CDirFilterBar> m_pDirFilterBar;
 
@@ -88,6 +98,7 @@ protected:
 	CDirPaneView *m_pLeftPaneView;
 	CDirPaneView *m_pRightPaneView;
 	CDirGutterView *m_pGutterView;
+	CDirSxSUnifiedView *m_pUnifiedView;
 	std::unique_ptr<CDirSideBySideCoordinator> m_pCoordinator;
 
 	virtual ~CDirFrame();
@@ -117,6 +128,10 @@ public:
 	afx_msg void OnSxsNavBack();
 	afx_msg void OnSxsNavForward();
 	afx_msg void OnSxsUpLevel();
+	void OnSxsNavBackSide(int pane);
+	void OnSxsNavForwardSide(int pane);
+	void OnSxsUpLevelSide(int pane);
+	void OnSxsUpLevelBoth();
 	afx_msg void OnUpdateSxsRange(CCmdUI* pCmdUI);
 	// Diffs dropdown presets
 	afx_msg void OnSxsDiffsShowDiffs();
@@ -138,6 +153,12 @@ public:
 	afx_msg void OnSxsSessionSettings();
 	// Home button
 	afx_msg void OnSxsHome();
+	// Stop button
+	afx_msg void OnSxsStop();
+	afx_msg void OnUpdateSxsStop(CCmdUI* pCmdUI);
+	// Minor and Files buttons
+	afx_msg void OnSxsShowMinor();
+	afx_msg void OnSxsFilesButton();
 	// Forward native WinMerge commands to SxS panes
 	afx_msg void OnFwdCopyLR();
 	afx_msg void OnFwdCopyRL();
@@ -149,10 +170,16 @@ public:
 protected:
 	afx_msg void OnUpdateSxsNavBack(CCmdUI* pCmdUI);
 	afx_msg void OnUpdateSxsNavForward(CCmdUI* pCmdUI);
+	afx_msg void OnMDIActivate(BOOL bActivate, CWnd* pActivateWnd, CWnd* pDeactivateWnd);
 	//}}AFX_MSG
 	DECLARE_MESSAGE_MAP()
 
 	void UpdateHeaderSizes();
+	CRect m_rcLastClient;           /**< Last known client rect for size-change guard */
+
+	// Embedded scan progress bar (SxS mode) in status bar pane 0
+	CProgressCtrl m_wndScanProgress;
+	static const UINT IDC_SXS_SCAN_PROGRESS = 34307;
 };
 
 

@@ -49,8 +49,12 @@ void COpenDoc::UpdateResources()
 {
 	SetTitle(_("Select Files or Folders").c_str());
 	POSITION pos = GetFirstViewPosition();
-	COpenView *pView = static_cast<COpenView *>(GetNextView(pos));
-	pView->UpdateResources();
+	if (pos)
+	{
+		CView *pView = GetNextView(pos);
+		if (pView && pView->IsKindOf(RUNTIME_CLASS(COpenView)))
+			static_cast<COpenView *>(pView)->UpdateResources();
+	}
 }
 
 BEGIN_MESSAGE_MAP(COpenDoc, CDocument)

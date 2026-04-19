@@ -529,8 +529,111 @@ void CSxSNameFiltersPage::OnOK()
 }
 
 // ============================================================================
+// Simple input box helper using in-memory dialog template
+// ============================================================================
+
+static CString s_inputBoxResult;
+
+static INT_PTR CALLBACK InputBoxDlgProc(HWND hDlg, UINT msg, WPARAM wParam, LPARAM lParam)
+{
+	switch (msg)
+	{
+	case WM_INITDIALOG:
+		{
+			const TCHAR* prompt = (const TCHAR*)lParam;
+			::SetDlgItemTextW(hDlg, 1001, prompt);
+			::SetDlgItemTextW(hDlg, 1002, L"");
+			::SetFocus(::GetDlgItem(hDlg, 1002));
+		}
+		return FALSE;
+	case WM_COMMAND:
+		if (LOWORD(wParam) == IDOK)
+		{
+			TCHAR text[512] = {};
+			::GetDlgItemTextW(hDlg, 1002, text, _countof(text));
+			s_inputBoxResult = text;
+			EndDialog(hDlg, IDOK);
+			return TRUE;
+		}
+		if (LOWORD(wParam) == IDCANCEL)
+		{
+			EndDialog(hDlg, IDCANCEL);
+			return TRUE;
+		}
+		break;
+	}
+	return FALSE;
+}
+
+static bool ShowInputBox(HWND hParent, const TCHAR* title, const TCHAR* prompt, CString& result)
+{
+	BYTE buf[1024] = {};
+	DLGTEMPLATE* pDlg = (DLGTEMPLATE*)buf;
+	pDlg->style = DS_MODALFRAME | DS_CENTER | WS_POPUP | WS_CAPTION | WS_SYSMENU;
+	pDlg->cdit = 3;
+	pDlg->cx = 200; pDlg->cy = 60;
+
+	WORD* pw = (WORD*)(pDlg + 1);
+	*pw++ = 0; // menu
+	*pw++ = 0; // class
+	size_t titleLen = wcslen(title) + 1;
+	memcpy(pw, title, titleLen * sizeof(wchar_t));
+	pw += titleLen;
+
+	// Static label
+	pw = (WORD*)(((ULONG_PTR)pw + 3) & ~3);
+	DLGITEMTEMPLATE* pItem = (DLGITEMTEMPLATE*)pw;
+	pItem->style = WS_CHILD | WS_VISIBLE | SS_LEFT;
+	pItem->x = 8; pItem->y = 6; pItem->cx = 184; pItem->cy = 10;
+	pItem->id = 1001;
+	pw = (WORD*)(pItem + 1);
+	*pw++ = 0xFFFF; *pw++ = 0x0082;
+	*pw++ = 0;
+	*pw++ = 0;
+
+	// Edit
+	pw = (WORD*)(((ULONG_PTR)pw + 3) & ~3);
+	pItem = (DLGITEMTEMPLATE*)pw;
+	pItem->style = WS_CHILD | WS_VISIBLE | WS_BORDER | WS_TABSTOP | ES_AUTOHSCROLL;
+	pItem->x = 8; pItem->y = 20; pItem->cx = 184; pItem->cy = 14;
+	pItem->id = 1002;
+	pw = (WORD*)(pItem + 1);
+	*pw++ = 0xFFFF; *pw++ = 0x0081;
+	*pw++ = 0;
+	*pw++ = 0;
+
+	// OK button
+	pw = (WORD*)(((ULONG_PTR)pw + 3) & ~3);
+	pItem = (DLGITEMTEMPLATE*)pw;
+	pItem->style = WS_CHILD | WS_VISIBLE | BS_DEFPUSHBUTTON | WS_TABSTOP;
+	pItem->x = 70; pItem->y = 40; pItem->cx = 60; pItem->cy = 14;
+	pItem->id = IDOK;
+	pw = (WORD*)(pItem + 1);
+	*pw++ = 0xFFFF; *pw++ = 0x0080;
+	const wchar_t ok[] = L"OK";
+	memcpy(pw, ok, sizeof(ok));
+	pw += _countof(ok);
+	*pw++ = 0;
+
+	s_inputBoxResult.Empty();
+	INT_PTR ret = DialogBoxIndirectParam(AfxGetInstanceHandle(), pDlg, hParent,
+		InputBoxDlgProc, (LPARAM)prompt);
+	if (ret == IDOK && !s_inputBoxResult.IsEmpty())
+	{
+		result = s_inputBoxResult;
+		return true;
+	}
+	return false;
+}
+
+// ============================================================================
 // Tab 5: Other Filters
 // ============================================================================
+
+BEGIN_MESSAGE_MAP(CSxSOtherFiltersPage, CSxSSessionPageBase)
+	ON_BN_CLICKED(IDC_SXS_FILTER_ADD, OnFilterAdd)
+	ON_BN_CLICKED(IDC_SXS_FILTER_REMOVE, OnFilterRemove)
+END_MESSAGE_MAP()
 
 CSxSOtherFiltersPage::CSxSOtherFiltersPage()
 	: m_bExcludeOsFiles(true)
@@ -611,9 +714,35 @@ void CSxSOtherFiltersPage::OnOK()
 	CSxSSessionPageBase::OnOK();
 }
 
+void CSxSOtherFiltersPage::OnFilterAdd()
+{
+	CString result;
+	if (ShowInputBox(m_hWnd, _T("Add Filter Rule"), _T("Enter filter pattern (e.g. *.bak):"), result))
+	{
+		CListBox* pList = (CListBox*)GetDlgItem(IDC_SXS_FILTER_RULES_LIST);
+		if (pList)
+			pList->AddString(result);
+	}
+}
+
+void CSxSOtherFiltersPage::OnFilterRemove()
+{
+	CListBox* pList = (CListBox*)GetDlgItem(IDC_SXS_FILTER_RULES_LIST);
+	if (!pList)
+		return;
+	int sel = pList->GetCurSel();
+	if (sel != LB_ERR)
+		pList->DeleteString(sel);
+}
+
 // ============================================================================
 // Tab 6: Misc
 // ============================================================================
+
+BEGIN_MESSAGE_MAP(CSxSMiscPage, CSxSSessionPageBase)
+	ON_BN_CLICKED(IDC_SXS_ALIGN_ADD, OnAlignAdd)
+	ON_BN_CLICKED(IDC_SXS_ALIGN_REMOVE, OnAlignRemove)
+END_MESSAGE_MAP()
 
 CSxSMiscPage::CSxSMiscPage()
 {
@@ -721,7 +850,43 @@ void CSxSMiscPage::OnOK()
 		}
 	}
 
+	// Read file format check states from list control
+	CListCtrl* pFmtList = (CListCtrl*)GetDlgItem(IDC_SXS_FILE_FORMATS_LIST);
+	if (pFmtList)
+	{
+		m_fileFormats.clear();
+		int count = pFmtList->GetItemCount();
+		for (int i = 0; i < count; i++)
+		{
+			CString name = pFmtList->GetItemText(i, 0);
+			bool checked = pFmtList->GetCheck(i) != 0;
+			m_fileFormats.push_back(std::make_pair(String((LPCTSTR)name), checked));
+		}
+	}
+
 	CSxSSessionPageBase::OnOK();
+}
+
+void CSxSMiscPage::OnAlignAdd()
+{
+	CString result;
+	if (ShowInputBox(m_hWnd, _T("Add Alignment Override"),
+		_T("Enter left=right filename pair (e.g. readme.txt=info.txt):"), result))
+	{
+		CListBox* pList = (CListBox*)GetDlgItem(IDC_SXS_ALIGN_OVERRIDES_LIST);
+		if (pList)
+			pList->AddString(result);
+	}
+}
+
+void CSxSMiscPage::OnAlignRemove()
+{
+	CListBox* pList = (CListBox*)GetDlgItem(IDC_SXS_ALIGN_OVERRIDES_LIST);
+	if (!pList)
+		return;
+	int sel = pList->GetCurSel();
+	if (sel != LB_ERR)
+		pList->DeleteString(sel);
 }
 
 // ============================================================================

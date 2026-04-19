@@ -20,6 +20,7 @@
 #include "IDirDoc.h"
 
 class CDirView;
+class CDirFrame;
 class CDirPaneView;
 class CDirSideBySideCoordinator;
 struct IMergeDoc;
@@ -153,6 +154,7 @@ protected:
 
 	// Implementation data
 private:
+	CDirFrame* GetDirFrame() const;
 	std::unique_ptr<CDiffContext> m_pCtxt; /**< Pointer to diff-data */
 	CDirView *m_pDirView; /**< Pointer to GUI */
 	bool m_bSideBySideMode; /**< True when using side-by-side pane mode */

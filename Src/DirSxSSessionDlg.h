@@ -89,6 +89,7 @@ protected:
 // --- Tab 5: Other Filters ---
 class CSxSOtherFiltersPage : public CSxSSessionPageBase
 {
+	DECLARE_MESSAGE_MAP()
 public:
 	CSxSOtherFiltersPage();
 	bool m_bExcludeOsFiles;
@@ -96,17 +97,23 @@ public:
 protected:
 	BOOL OnInitDialog() override;
 	void OnOK() override;
+	afx_msg void OnFilterAdd();
+	afx_msg void OnFilterRemove();
 };
 
 // --- Tab 6: Misc ---
 class CSxSMiscPage : public CSxSSessionPageBase
 {
+	DECLARE_MESSAGE_MAP()
 public:
 	CSxSMiscPage();
 	std::vector<String> m_alignmentOverrides;
+	std::vector<std::pair<String, bool>> m_fileFormats; // name, enabled
 protected:
 	BOOL OnInitDialog() override;
 	void OnOK() override;
+	afx_msg void OnAlignAdd();
+	afx_msg void OnAlignRemove();
 };
 
 /**

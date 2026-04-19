@@ -41,6 +41,7 @@ public:
 	void SetCustomFlags1(DIFFITEM *diffpos, unsigned flag);
 
 	void Swap(int idx1, int idx2);
+	bool HasTreeRoot() const { return m_pRoot != nullptr; }
 
 protected:
 	DIFFITEM* m_pRoot; /**< Root of list of diffitems; initially `nullptr`. */

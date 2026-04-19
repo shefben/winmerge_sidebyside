@@ -1145,6 +1145,9 @@
     <ClCompile Include="DirSideBySideFilterBar.cpp" />
     <ClCompile Include="DirSxSToolBar.cpp" />
     <ClCompile Include="DirSxSSessionDlg.cpp" />
+    <ClCompile Include="DirSxSUnifiedView.cpp" />
+    <ClCompile Include="DirSxSLogPanel.cpp" />
+    <ClCompile Include="DirSxSWelcomeView.cpp" />
     <ClCompile Include="DirGutterView.cpp" />
     <ClCompile Include="DirItem.cpp">
       <PrecompiledHeader>Use</PrecompiledHeader>
@@ -1152,6 +1155,11 @@
       <PrecompiledHeaderOutputFile>$(IntDir)$(TargetName)2.pch</PrecompiledHeaderOutputFile>
     </ClCompile>
     <ClCompile Include="DirScan.cpp">
+      <PrecompiledHeader>Use</PrecompiledHeader>
+      <PrecompiledHeaderFile>pch.h</PrecompiledHeaderFile>
+      <PrecompiledHeaderOutputFile>$(IntDir)$(TargetName)2.pch</PrecompiledHeaderOutputFile>
+    </ClCompile>
+    <ClCompile Include="DirScanCache.cpp">
       <PrecompiledHeader>Use</PrecompiledHeader>
       <PrecompiledHeaderFile>pch.h</PrecompiledHeaderFile>
       <PrecompiledHeaderOutputFile>$(IntDir)$(TargetName)2.pch</PrecompiledHeaderOutputFile>
@@ -1597,10 +1605,14 @@
     <ClInclude Include="DirSideBySideFilterBar.h" />
     <ClInclude Include="DirSxSToolBar.h" />
     <ClInclude Include="DirSxSSessionDlg.h" />
+    <ClInclude Include="DirSxSUnifiedView.h" />
+    <ClInclude Include="DirSxSLogPanel.h" />
+    <ClInclude Include="DirSxSWelcomeView.h" />
     <ClInclude Include="DirGutterView.h" />
     <ClInclude Include="DirItem.h" />
     <ClInclude Include="DirReportTypes.h" />
     <ClInclude Include="DirScan.h" />
+    <ClInclude Include="DirScanCache.h" />
     <ClInclude Include="DirTravel.h" />
     <ClInclude Include="DirView.h" />
     <ClInclude Include="DirViewColItems.h" />

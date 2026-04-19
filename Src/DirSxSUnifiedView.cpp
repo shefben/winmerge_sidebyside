@@ -4,13 +4,16 @@
 //    SPDX-License-Identifier: GPL-2.0-or-later
 /////////////////////////////////////////////////////////////////////////////
 /**
- * @file  DirPaneView.cpp
+ * @file  DirSxSUnifiedView.cpp
  *
- * @brief Implementation of CDirPaneView class for side-by-side folder comparison
+ * @brief Implementation of CDirSxSUnifiedView — single unified 7-column list
+ *        for side-by-side folder comparison (Beyond Compare-style).
+ *
+ * Columns: Name(L) | Size(L) | Modified(L) | Cmp | Name(R) | Size(R) | Modified(R)
  */
 
 #include "StdAfx.h"
-#include "DirPaneView.h"
+#include "DirSxSUnifiedView.h"
 #include "DirDoc.h"
 #include "DirFrame.h"
 #include "DirSideBySideCoordinator.h"
@@ -26,12 +29,14 @@
 #include "resource.h"
 #include "DirActions.h"
 #include "IListCtrlImpl.h"
-#include "DirGutterView.h"
 #include "MainFrm.h"
 #include "FileLocation.h"
 #include "FileTransform.h"
 #include "paths.h"
 #include "ShellFileOperations.h"
+#include "MergeApp.h"
+#include "FolderCmp.h"
+#include "CompareStats.h"
 #include <afxole.h>
 #include <Shlobj.h>
 #include <shobjidl.h>
@@ -40,6 +45,7 @@
 #include <fstream>
 #include <uxtheme.h>
 #pragma comment(lib, "uxtheme.lib")
+#pragma comment(lib, "version.lib")
 
 #ifdef _DEBUG
 #define new DEBUG_NEW
@@ -63,6 +69,7 @@ namespace BcColors
 	static const COLORREF TEXT_DIFF     = RGB(220, 60, 60);   // Different files (red)
 	static const COLORREF TEXT_FILTERED = RGB(100, 100, 100); // Filtered (dim gray)
 	static const COLORREF TEXT_HEADER   = RGB(200, 200, 200); // Header/column text
+	static const COLORREF TEXT_DIMMED   = RGB(60, 60, 60);    // Dimmed text for missing side
 
 	// Folder text colors — same scheme: red=different, purple=orphan, white=same
 	static const COLORREF FOLDER_IDENTICAL = RGB(255, 255, 255); // All children identical (white)
@@ -77,9 +84,13 @@ namespace BcColors
 	static const COLORREF ICON_FOLDER_ORPHAN    = RGB(140, 95, 210);  // Purple folder (orphan)
 	static const COLORREF ICON_FOLDER_MIXED     = RGB(220, 50, 50);   // Red folder (mixed diffs)
 	static const COLORREF ICON_FOLDER_UNKNOWN   = RGB(200, 180, 50);  // Yellow folder (unknown)
+
+	// Dimmed background for missing-side columns
+	static const COLORREF BG_MISSING    = RGB(25, 27, 27);
+	static const COLORREF BG_MISSING_ALT= RGB(32, 35, 35);
 }
 
-// Default column width (same value as CDirView)
+// Default column width
 constexpr int DefColumnWidth = 111;
 
 // BC-style colored folder icon indices (appended after standard icons)
@@ -88,8 +99,9 @@ enum BcFolderIcon
 	BCFOLDER_IDENTICAL = 0, // Gray folder — all children same
 	BCFOLDER_DIFFERENT,     // Red folder — contains differences
 	BCFOLDER_ORPHAN,        // Purple folder — orphan (one side only)
-	BCFOLDER_MIXED,         // Red-ish folder — mixed diffs + orphans
+	BCFOLDER_MIXED,         // Split folder — left red (diffs), right purple (orphans)
 	BCFOLDER_UNKNOWN,       // Yellow folder — unscanned / unknown
+	BCFOLDER_PENDING,       // Gray outlined folder — awaiting scan
 	BCFOLDER_COUNT
 };
 
@@ -98,23 +110,62 @@ static int s_nBcFolderIconBase = -1;
 
 /**
  * @brief Draw a simple folder icon shape filled with a given color.
- * The folder is drawn as: a tab on top-left, then a rectangle body.
  */
 static void DrawColoredFolderIcon(CDC &dc, int cx, int cy, COLORREF fillColor)
 {
-	// Background: transparent (already cleared)
 	CBrush brush(fillColor);
 	CPen pen(PS_SOLID, 1, RGB(GetRValue(fillColor) * 2 / 3,
 		GetGValue(fillColor) * 2 / 3, GetBValue(fillColor) * 2 / 3));
 	CBrush* pOldBrush = dc.SelectObject(&brush);
 	CPen* pOldPen = dc.SelectObject(&pen);
 
-	// Tab portion (top-left): small rectangle
 	int tabW = cx * 5 / 12;
 	int tabH = cy / 5;
 	dc.Rectangle(1, 1, tabW, 1 + tabH);
 
-	// Body: main folder rectangle below the tab
+	int bodyTop = 1 + tabH - 1;
+	dc.Rectangle(1, bodyTop, cx - 1, cy - 1);
+
+	dc.SelectObject(pOldBrush);
+	dc.SelectObject(pOldPen);
+}
+
+/**
+ * @brief Draw a split-color folder icon — left half one color, right half another.
+ * Used for BCFOLDER_MIXED: left=red (differences), right=purple (orphans).
+ */
+static void DrawSplitColorFolderIcon(CDC &dc, int cx, int cy,
+	COLORREF leftColor, COLORREF rightColor)
+{
+	int midX = cx / 2;
+
+	// Left half
+	CRgn rgnLeft;
+	rgnLeft.CreateRectRgn(0, 0, midX, cy);
+	dc.SelectClipRgn(&rgnLeft);
+	DrawColoredFolderIcon(dc, cx, cy, leftColor);
+
+	// Right half
+	CRgn rgnRight;
+	rgnRight.CreateRectRgn(midX, 0, cx, cy);
+	dc.SelectClipRgn(&rgnRight);
+	DrawColoredFolderIcon(dc, cx, cy, rightColor);
+
+	dc.SelectClipRgn(nullptr);
+}
+
+/**
+ * @brief Draw an outlined (hollow) folder icon for "awaiting scan" state.
+ */
+static void DrawOutlinedFolderIcon(CDC &dc, int cx, int cy, COLORREF borderColor)
+{
+	CBrush* pOldBrush = (CBrush*)dc.SelectStockObject(NULL_BRUSH);
+	CPen pen(PS_SOLID, 1, borderColor);
+	CPen* pOldPen = dc.SelectObject(&pen);
+
+	int tabW = cx * 5 / 12;
+	int tabH = cy / 5;
+	dc.Rectangle(1, 1, tabW, 1 + tabH);
 	int bodyTop = 1 + tabH - 1;
 	dc.Rectangle(1, bodyTop, cx - 1, cy - 1);
 
@@ -123,64 +174,78 @@ static void DrawColoredFolderIcon(CDC &dc, int cx, int cy, COLORREF fillColor)
 }
 
 // Text buffer for LVN_GETDISPINFO
-static String s_rgDispinfoText[2];
+static String s_rgUnifiedDispinfoText[2];
 
-static tchar_t* NTAPI AllocPaneDispinfoText(const String &s)
+static tchar_t* NTAPI AllocUnifiedDispinfoText(const String &s)
 {
 	static int i = 0;
-	const tchar_t* pszText = (s_rgDispinfoText[i] = s).c_str();
+	const tchar_t* pszText = (s_rgUnifiedDispinfoText[i] = s).c_str();
 	i ^= 1;
 	return (tchar_t*)pszText;
 }
 
 /////////////////////////////////////////////////////////////////////////////
-// CDirPaneView
+// CDirSxSUnifiedView
 
-IMPLEMENT_DYNCREATE(CDirPaneView, CListView)
+IMPLEMENT_DYNCREATE(CDirSxSUnifiedView, CListView)
 
-CDirPaneView::CDirPaneView()
-	: m_nThisPane(0)
-	, m_pCoordinator(nullptr)
+CDirSxSUnifiedView::CDirSxSUnifiedView()
+	: m_pCoordinator(nullptr)
 	, m_pList(nullptr)
 	, m_bUseColors(true)
 	, m_bRowStripes(false)
-	, m_bRedisplayPending(false)
+	, m_bResizing(false)
 	, m_nCachedToleranceSecs(-1)
+	, m_nContextSide(0)
+	, m_nActiveSide(0)
 {
 	m_cachedColors = {};
 }
 
-CDirPaneView::~CDirPaneView()
+CDirSxSUnifiedView::~CDirSxSUnifiedView()
 {
-	// Kill any pending redisplay timer to prevent post-destruction callback
-	if (m_bRedisplayPending)
-		KillTimer(TIMER_REDISPLAY);
 }
 
 #ifdef _DEBUG
-CDirDoc* CDirPaneView::GetDocument()
+CDirDoc* CDirSxSUnifiedView::GetDocument()
 {
 	ASSERT(m_pDocument->IsKindOf(RUNTIME_CLASS(CDirDoc)));
 	return (CDirDoc*)m_pDocument;
 }
 #endif
 
-CDirFrame* CDirPaneView::GetParentFrame()
+CDirFrame* CDirSxSUnifiedView::GetParentFrame()
 {
 	return static_cast<CDirFrame*>(CListView::GetParentFrame());
 }
 
-const CDiffContext& CDirPaneView::GetDiffContext() const
+const CDiffContext& CDirSxSUnifiedView::GetDiffContext() const
 {
 	return GetDocument()->GetDiffContext();
 }
 
-CDiffContext& CDirPaneView::GetDiffContext()
+CDiffContext& CDirSxSUnifiedView::GetDiffContext()
 {
 	return GetDocument()->GetDiffContext();
 }
 
-BEGIN_MESSAGE_MAP(CDirPaneView, CListView)
+/**
+ * @brief Determine which "side" a column belongs to.
+ * @return 0 for left (cols 0-2), -1 for center (col 3), 1 for right (cols 4-6).
+ */
+int CDirSxSUnifiedView::GetColumnSide(int col)
+{
+	if (col <= COL_LEFT_MODIFIED)
+		return 0;
+	if (col == COL_CMP)
+		return -1;
+	return 1;
+}
+
+/////////////////////////////////////////////////////////////////////////////
+// Message map
+
+BEGIN_MESSAGE_MAP(CDirSxSUnifiedView, CListView)
 	ON_NOTIFY_REFLECT(NM_CUSTOMDRAW, OnCustomDraw)
 	ON_NOTIFY(NM_CUSTOMDRAW, 0, OnHeaderCustomDraw)
 	ON_NOTIFY_REFLECT(NM_DBLCLK, OnDblClick)
@@ -199,10 +264,9 @@ BEGIN_MESSAGE_MAP(CDirPaneView, CListView)
 	ON_UPDATE_COMMAND_UI(ID_DIR_SXS_MOVE, OnUpdateSxsNeedSelection)
 	ON_UPDATE_COMMAND_UI(ID_DIR_SXS_OPEN_COMPARE, OnUpdateSxsNeedSelection)
 	ON_UPDATE_COMMAND_UI(ID_DIR_SXS_CROSS_COMPARE, OnUpdateSxsNeedSelection)
+	ON_NOTIFY_REFLECT(NM_CLICK, OnClick)
 	ON_NOTIFY_REFLECT(LVN_COLUMNCLICK, OnColumnClick)
 	ON_NOTIFY_REFLECT(LVN_ITEMCHANGED, OnItemChanged)
-	ON_NOTIFY_REFLECT(LVN_ENDSCROLL, OnScroll)
-	ON_WM_MOUSEWHEEL()
 	ON_COMMAND(ID_DIR_SXS_TOGGLE_TREE, OnSxsToggleTree)
 	ON_COMMAND(ID_DIR_SXS_EXPAND_ALL, OnSxsExpandAll)
 	ON_COMMAND(ID_DIR_SXS_COLLAPSE_ALL, OnSxsCollapseAll)
@@ -272,7 +336,10 @@ BEGIN_MESSAGE_MAP(CDirPaneView, CListView)
 	ON_COMMAND(ID_DIR_SXS_CUSTOMIZE_KEYS, OnSxsCustomizeKeys)
 END_MESSAGE_MAP()
 
-BOOL CDirPaneView::PreCreateWindow(CREATESTRUCT& cs)
+/////////////////////////////////////////////////////////////////////////////
+// Initialization
+
+BOOL CDirSxSUnifiedView::PreCreateWindow(CREATESTRUCT& cs)
 {
 	__super::PreCreateWindow(cs);
 	cs.style |= LVS_REPORT | LVS_OWNERDATA | LVS_SHOWSELALWAYS | LVS_EDITLABELS;
@@ -281,10 +348,9 @@ BOOL CDirPaneView::PreCreateWindow(CREATESTRUCT& cs)
 }
 
 /**
- * @brief Initialize the pane view.
- * Sets up the list control, image list, columns, and colors.
+ * @brief Initialize the unified view with 7 columns.
  */
-void CDirPaneView::OnInitialUpdate()
+void CDirSxSUnifiedView::OnInitialUpdate()
 {
 	const int iconCX = []() {
 		const int cx = GetSystemMetrics(SM_CXSMICON);
@@ -308,9 +374,6 @@ void CDirPaneView::OnInitialUpdate()
 	auto properties = strutils::split<std::vector<String>>(GetOptionsMgr()->GetString(OPT_ADDITIONAL_PROPERTIES), ' ');
 	m_pColItems.reset(new DirViewColItems(pDoc->m_nDirs, properties));
 
-	// In SxS mode, restrict columns to Name/Ext/Size/Modified for this pane
-	m_pColItems->SetSxSPaneColumns(m_nThisPane);
-
 	m_pList->SendMessage(CCM_SETUNICODEFORMAT, TRUE, 0);
 
 	// Load user-selected font
@@ -320,7 +383,7 @@ void CDirPaneView::OnInitialUpdate()
 		CWnd::SetFont(&m_font, TRUE);
 	}
 
-	// Create bold font for directory names (Phase 2: tree polish)
+	// Create bold font for directory names
 	{
 		LOGFONT lf = {};
 		if (m_font.GetSafeHandle())
@@ -345,7 +408,7 @@ void CDirPaneView::OnInitialUpdate()
 	if (hWnd != nullptr)
 		m_ctlSortHeader.SubclassWindow(hWnd);
 
-	// Load icons - same set as CDirView
+	// Load icons
 	VERIFY(m_imageList.Create(iconCX, iconCY, ILC_COLOR32 | ILC_MASK, 15, 1));
 	int icon_ids[] = {
 		IDI_LFILE, IDI_MFILE, IDI_RFILE,
@@ -372,8 +435,9 @@ void CDirPaneView::OnInitialUpdate()
 			BcColors::ICON_FOLDER_IDENTICAL,
 			BcColors::ICON_FOLDER_DIFFERENT,
 			BcColors::ICON_FOLDER_ORPHAN,
-			BcColors::ICON_FOLDER_MIXED,
+			RGB(0, 0, 0), // BCFOLDER_MIXED — handled specially below
 			BcColors::ICON_FOLDER_UNKNOWN,
+			RGB(120, 120, 130), // BCFOLDER_PENDING — gray outline
 		};
 		CDC dcMem;
 		dcMem.CreateCompatibleDC(nullptr);
@@ -381,21 +445,22 @@ void CDirPaneView::OnInitialUpdate()
 		{
 			CBitmap bmpColor, bmpMask;
 
-			// Create 32-bit color bitmap
 			bmpColor.CreateBitmap(iconCX, iconCY, 1, 32, nullptr);
 			CBitmap* pOld = dcMem.SelectObject(&bmpColor);
-
-			// Clear to transparent (black = masked out)
 			dcMem.FillSolidRect(0, 0, iconCX, iconCY, RGB(0, 0, 0));
-			DrawColoredFolderIcon(dcMem, iconCX, iconCY, folderColors[fi]);
+			if (fi == BCFOLDER_MIXED)
+				DrawSplitColorFolderIcon(dcMem, iconCX, iconCY,
+					BcColors::ICON_FOLDER_DIFFERENT, BcColors::ICON_FOLDER_ORPHAN);
+			else if (fi == BCFOLDER_PENDING)
+				DrawOutlinedFolderIcon(dcMem, iconCX, iconCY, RGB(120, 120, 130));
+			else
+				DrawColoredFolderIcon(dcMem, iconCX, iconCY, folderColors[fi]);
 			dcMem.SelectObject(pOld);
 
-			// Create mask bitmap (black = opaque, white = transparent)
 			bmpMask.CreateBitmap(iconCX, iconCY, 1, 1, nullptr);
 			pOld = dcMem.SelectObject(&bmpMask);
 			dcMem.FillSolidRect(0, 0, iconCX, iconCY, RGB(255, 255, 255));
 
-			// Draw the same folder shape in black on the mask (opaque area)
 			CBrush black(RGB(0, 0, 0));
 			CPen blackPen(PS_SOLID, 1, RGB(0, 0, 0));
 			CBrush* pOldBr = dcMem.SelectObject(&black);
@@ -414,33 +479,23 @@ void CDirPaneView::OnInitialUpdate()
 
 	m_pList->SetImageList(&m_imageList, LVSIL_SMALL);
 
-	// Load columns — SxS mode uses fixed 4-column layout
+	// Insert 7 columns
 	m_pList->SetRedraw(FALSE);
 
-	// DPI-aware default widths
 	const int dpi = CClientDC(this).GetDeviceCaps(LOGPIXELSX);
 	auto px = [dpi](int pt) { return MulDiv(pt, dpi, 72); };
 
-	// Insert the 4 BC-style column headers
-	m_pList->InsertColumn(0, _T("Name"),     LVCFMT_LEFT,  px(200));
-	m_pList->InsertColumn(1, _T("Ext"),      LVCFMT_LEFT,  px(50));
-	m_pList->InsertColumn(2, _T("Size"),     LVCFMT_RIGHT, px(70));
-	m_pList->InsertColumn(3, _T("Modified"), LVCFMT_LEFT,  px(130));
-
-	// Load saved column widths if available
-	const String& colWidthOpt = (m_nThisPane == 0) ? OPT_DIRVIEW_SXS_LEFT_COLUMN_WIDTHS :
-		OPT_DIRVIEW_SXS_RIGHT_COLUMN_WIDTHS;
-	String colWidths = GetOptionsMgr()->GetString(colWidthOpt);
-	if (!colWidths.empty())
-	{
-		m_pColItems->LoadColumnWidths(
-			colWidths,
-			std::bind(&CListCtrl::SetColumnWidth, m_pList, std::placeholders::_1, std::placeholders::_2),
-			px(DefColumnWidth));
-	}
+	m_pList->InsertColumn(COL_LEFT_NAME,     _T("Name"),     LVCFMT_LEFT,  px(180));
+	m_pList->InsertColumn(COL_LEFT_SIZE,     _T("Size"),     LVCFMT_RIGHT, px(70));
+	m_pList->InsertColumn(COL_LEFT_MODIFIED, _T("Modified"), LVCFMT_LEFT,  px(120));
+	m_pList->InsertColumn(COL_CMP,           _T("Cmp"),      LVCFMT_CENTER, px(30));
+	m_pList->InsertColumn(COL_RIGHT_NAME,    _T("Name"),     LVCFMT_LEFT,  px(180));
+	m_pList->InsertColumn(COL_RIGHT_SIZE,    _T("Size"),     LVCFMT_RIGHT, px(70));
+	m_pList->InsertColumn(COL_RIGHT_MODIFIED,_T("Modified"), LVCFMT_LEFT,  px(120));
 
 	// Extended styles
-	DWORD exstyle = LVS_EX_FULLROWSELECT | LVS_EX_HEADERDRAGDROP | LVS_EX_INFOTIP | LVS_EX_DOUBLEBUFFER;
+	DWORD exstyle = LVS_EX_FULLROWSELECT | LVS_EX_INFOTIP
+		| LVS_EX_DOUBLEBUFFER | LVS_EX_SUBITEMIMAGES;
 	m_pList->SetExtendedStyle(exstyle);
 
 	m_pList->SetRedraw(TRUE);
@@ -452,7 +507,10 @@ void CDirPaneView::OnInitialUpdate()
 	LoadKeyBindings();
 }
 
-BOOL CDirPaneView::PreTranslateMessage(MSG* pMsg)
+/////////////////////////////////////////////////////////////////////////////
+// PreTranslateMessage — keyboard shortcuts
+
+BOOL CDirSxSUnifiedView::PreTranslateMessage(MSG* pMsg)
 {
 	if (pMsg->message == WM_KEYDOWN)
 	{
@@ -557,7 +615,10 @@ BOOL CDirPaneView::PreTranslateMessage(MSG* pMsg)
 	return __super::PreTranslateMessage(pMsg);
 }
 
-BOOL CDirPaneView::OnChildNotify(UINT uMsg, WPARAM wParam, LPARAM lParam, LRESULT* pResult)
+/////////////////////////////////////////////////////////////////////////////
+// Child notify — dispatch LVN_GETDISPINFO
+
+BOOL CDirSxSUnifiedView::OnChildNotify(UINT uMsg, WPARAM wParam, LPARAM lParam, LRESULT* pResult)
 {
 	if (uMsg == WM_NOTIFY)
 	{
@@ -571,10 +632,149 @@ BOOL CDirPaneView::OnChildNotify(UINT uMsg, WPARAM wParam, LPARAM lParam, LRESUL
 	return __super::OnChildNotify(uMsg, wParam, lParam, pResult);
 }
 
+/////////////////////////////////////////////////////////////////////////////
+// Cell text formatting helpers
+
 /**
- * @brief Respond to LVN_GETDISPINFO message for this pane
+ * @brief Format a file size with thousands separators (e.g. "1,234,567").
  */
-void CDirPaneView::ReflectGetdispinfo(NMLVDISPINFO *pParam)
+static String FormatFileSize(int64_t size)
+{
+	if (size < 0)
+		return _T("");
+	String raw = strutils::format(_T("%lld"), size);
+	String result;
+	int len = static_cast<int>(raw.length());
+	for (int i = 0; i < len; i++)
+	{
+		if (i > 0 && (len - i) % 3 == 0)
+			result += _T(',');
+		result += raw[i];
+	}
+	return result;
+}
+
+/**
+ * @brief Format a Poco::Timestamp as "YYYY-MM-DD HH:MM:SS" in local time.
+ */
+static String FormatTimestamp(const DiffFileInfo &fi)
+{
+	if (fi.mtime == 0)
+		return _T("");
+	int64_t epochUs = fi.mtime.epochMicroseconds();
+	int64_t ft100ns = epochUs * 10 + 116444736000000000LL;
+	FILETIME ft;
+	ft.dwLowDateTime = static_cast<DWORD>(ft100ns);
+	ft.dwHighDateTime = static_cast<DWORD>(ft100ns >> 32);
+	SYSTEMTIME stUtc, stLocal;
+	FileTimeToSystemTime(&ft, &stUtc);
+	SystemTimeToTzSpecificLocalTime(nullptr, &stUtc, &stLocal);
+	return strutils::format(_T("%04d-%02d-%02d %02d:%02d:%02d"),
+		stLocal.wYear, stLocal.wMonth, stLocal.wDay,
+		stLocal.wHour, stLocal.wMinute, stLocal.wSecond);
+}
+
+/**
+ * @brief Get the comparison symbol for a row.
+ * "=" for identical, "\u2260" for different, blank for folders/orphans.
+ */
+String CDirSxSUnifiedView::GetComparisonSymbol(int nRow) const
+{
+	if (nRow < 0 || nRow >= static_cast<int>(m_listViewItems.size()))
+		return _T("");
+
+	DIFFITEM *key = reinterpret_cast<DIFFITEM*>(m_listViewItems[nRow].lParam);
+	if (!key)
+		return _T("");
+
+	if (!GetDocument()->HasDiffs())
+		return _T("");
+
+	const CDiffContext &ctxt = GetDiffContext();
+	const DIFFITEM &di = ctxt.GetDiffAt(key);
+
+	if (di.diffcode.isDirectory())
+	{
+		// Show hourglass if this directory is actively being scanned
+		DIFFITEM *pActive = ctxt.m_pActiveScanParent.load(std::memory_order_relaxed);
+		if (pActive == key)
+			return _T("\u231B"); // Hourglass
+		return _T("");
+	}
+	if (!IsItemExistAll(ctxt, di))
+		return _T("");  // Orphan — blank
+
+	// Use raw compare flags to handle all result states including
+	// files in subdirectories that may not match isResultDiff()'s
+	// strict existAll() requirement.
+	if (di.diffcode.isResultFiltered())
+		return _T("~");
+	unsigned cmpResult = di.diffcode.diffcode & DIFFCODE::COMPAREFLAGS;
+	if (cmpResult == DIFFCODE::SAME)
+		return _T("=");
+	if (cmpResult == DIFFCODE::DIFF)
+		return _T("\u2260");
+	if (cmpResult == DIFFCODE::CMPERR || cmpResult == DIFFCODE::CMPABORT)
+		return _T("!");
+	// NOCMP (0) — not yet compared
+	return _T("?");
+}
+
+/**
+ * @brief Get cell text for a given row and column in the unified view.
+ *
+ * Columns 0-2 get data from the left side (diffFileInfo[0]).
+ * Column 3 returns the comparison symbol.
+ * Columns 4-6 get data from the right side (diffFileInfo[nDirs-1]).
+ */
+String CDirSxSUnifiedView::GetCellText(int nRow, int nCol) const
+{
+	if (nRow < 0 || nRow >= static_cast<int>(m_listViewItems.size()))
+		return _T("");
+
+	DIFFITEM *key = reinterpret_cast<DIFFITEM*>(m_listViewItems[nRow].lParam);
+	if (!key)
+		return _T("");
+
+	if (!GetDocument()->HasDiffs())
+		return _T("");
+
+	const CDiffContext &ctxt = GetDiffContext();
+	const DIFFITEM &di = ctxt.GetDiffAt(key);
+	int nDirs = ctxt.GetCompareDirs();
+
+	if (nCol == COL_CMP)
+		return GetComparisonSymbol(nRow);
+
+	// Determine which side this column maps to
+	int side = (nCol <= COL_LEFT_MODIFIED) ? 0 : (nDirs - 1);
+
+	// Check if item exists on this side
+	if (!di.diffcode.exists(side))
+		return _T("");
+
+	// Determine the "type" of column within the side (0=Name, 1=Size, 2=Modified)
+	int colType = (nCol <= COL_LEFT_MODIFIED) ? nCol : (nCol - COL_RIGHT_NAME);
+
+	switch (colType)
+	{
+	case 0: // Name
+		return di.diffFileInfo[side].filename;
+	case 1: // Size
+		if (di.diffcode.isDirectory())
+			return _T("");
+		return FormatFileSize(di.diffFileInfo[side].size);
+	case 2: // Modified
+		return FormatTimestamp(di.diffFileInfo[side]);
+	default:
+		return _T("");
+	}
+}
+
+/////////////////////////////////////////////////////////////////////////////
+// LVN_GETDISPINFO
+
+void CDirSxSUnifiedView::ReflectGetdispinfo(NMLVDISPINFO *pParam)
 {
 	int nIdx = pParam->item.iItem;
 	if (nIdx < 0 || nIdx >= static_cast<int>(m_listViewItems.size()))
@@ -583,30 +783,39 @@ void CDirPaneView::ReflectGetdispinfo(NMLVDISPINFO *pParam)
 	DIFFITEM *key = reinterpret_cast<DIFFITEM*>(m_listViewItems[nIdx].lParam);
 	if (key == nullptr)
 	{
-		// Placeholder row - show empty
 		if (pParam->item.mask & LVIF_TEXT)
 			pParam->item.pszText = _T("");
 		if (pParam->item.mask & LVIF_IMAGE)
-			pParam->item.iImage = -1; // No image for placeholder
+			pParam->item.iImage = -1;
 		return;
 	}
 
 	if (!GetDocument()->HasDiffs())
 		return;
 
-	const CDiffContext &ctxt = GetDiffContext();
-	const DIFFITEM &di = ctxt.GetDiffAt(key);
-
-	int i = m_pColItems->ColPhysToLog(pParam->item.iSubItem);
-
 	if (pParam->item.mask & LVIF_TEXT)
 	{
-		String s = m_pColItems->ColGetTextToDisplay(&ctxt, i, di);
-		pParam->item.pszText = AllocPaneDispinfoText(s);
+		String s = GetCellText(nIdx, pParam->item.iSubItem);
+		pParam->item.pszText = AllocUnifiedDispinfoText(s);
 	}
 	if (pParam->item.mask & LVIF_IMAGE)
 	{
-		pParam->item.iImage = GetPaneColImage(di);
+		int nSubItem = pParam->item.iSubItem;
+		if (nSubItem == COL_LEFT_NAME || nSubItem == COL_RIGHT_NAME)
+		{
+			const CDiffContext &ctxt = GetDiffContext();
+			const DIFFITEM &di = ctxt.GetDiffAt(key);
+			int side = GetColumnSide(nSubItem);
+			bool bExists = (side == 0)
+				? di.diffcode.existsFirst()
+				: di.diffcode.existsSecond();
+			// Use per-side icon so folder icons reflect orphans on each side independently
+			pParam->item.iImage = bExists ? GetItemIconForSide(nIdx, side) : -1;
+		}
+		else
+		{
+			pParam->item.iImage = -1;
+		}
 	}
 	if (pParam->item.mask & LVIF_INDENT)
 	{
@@ -615,18 +824,53 @@ void CDirPaneView::ReflectGetdispinfo(NMLVDISPINFO *pParam)
 }
 
 /**
- * @brief Get the icon image index for an item in this pane.
- * For directories, uses BC-style colored folder icons based on content status.
- * For files, delegates to the standard GetColImage.
+ * @brief Get icon for an item row (used for column 0 only).
+ * Directories use BC-style colored folder icons based on content status.
  */
-int CDirPaneView::GetPaneColImage(const DIFFITEM &di) const
+int CDirSxSUnifiedView::GetItemIcon(int nRow) const
 {
+	if (nRow < 0 || nRow >= static_cast<int>(m_listViewItems.size()))
+		return -1;
+
+	DIFFITEM *key = reinterpret_cast<DIFFITEM*>(m_listViewItems[nRow].lParam);
+	if (!key)
+		return -1;
+
+	if (!GetDocument()->HasDiffs())
+		return -1;
+
+	const CDiffContext &ctxt = GetDiffContext();
+	const DIFFITEM &di = ctxt.GetDiffAt(key);
+
 	if (!di.diffcode.isDirectory() || s_nBcFolderIconBase < 0)
 	{
-		// Non-directory or BC icons not loaded — use standard icons
+		// Non-directory — use standard icon via coordinator
+		int icon;
 		if (m_pCoordinator)
-			return m_pCoordinator->GetPaneColImage(di, m_nThisPane);
-		return GetColImage(di);
+			icon = m_pCoordinator->GetPaneColImage(di, 0);
+		else
+			icon = GetColImage(di);
+
+		// SxS mode: remap NOCMP items to plain file icon instead of "?"
+		if ((di.diffcode.diffcode & DIFFCODE::COMPAREFLAGS) == DIFFCODE::NOCMP)
+			icon = DIFFIMG_FILE;
+
+		// SxS mode: remap orphan-unique icons to plain file icon
+		// (which pane the file is on is already clear from placement)
+		switch (icon)
+		{
+		case DIFFIMG_LUNIQUE:
+		case DIFFIMG_RUNIQUE:
+		case DIFFIMG_MUNIQUE:
+			icon = DIFFIMG_FILE;
+			break;
+		case DIFFIMG_LDIRUNIQUE:
+		case DIFFIMG_RDIRUNIQUE:
+		case DIFFIMG_MDIRUNIQUE:
+			icon = DIFFIMG_DIR;
+			break;
+		}
+		return icon;
 	}
 
 	// Directory: use BC-style colored folder icons
@@ -637,8 +881,6 @@ int CDirPaneView::GetPaneColImage(const DIFFITEM &di) const
 	if (di.diffcode.isResultFiltered())
 		return DIFFIMG_DIRSKIP;
 
-	const CDiffContext &ctxt = GetDiffContext();
-
 	// Orphan folder
 	if (!IsItemExistAll(ctxt, di))
 		return s_nBcFolderIconBase + BCFOLDER_ORPHAN;
@@ -646,6 +888,25 @@ int CDirPaneView::GetPaneColImage(const DIFFITEM &di) const
 	// Folder on both sides — check content status
 	if (m_pCoordinator)
 	{
+		// If folder hasn't been scanned yet (no children AND no compare flags set),
+		// show pending icon. Scanned-but-empty folders will have SAME or DIFF set.
+		if (!di.HasChildren() &&
+			(di.diffcode.diffcode & DIFFCODE::COMPAREFLAGS) == DIFFCODE::NOCMP)
+		{
+			return s_nBcFolderIconBase + BCFOLDER_PENDING;
+		}
+
+		// For scanned-but-empty folders, use their compare flags directly
+		if (!di.HasChildren())
+		{
+			if (di.diffcode.isResultSame())
+				return s_nBcFolderIconBase + BCFOLDER_IDENTICAL;
+			else if (di.diffcode.isResultDiff())
+				return s_nBcFolderIconBase + BCFOLDER_DIFFERENT;
+			else
+				return s_nBcFolderIconBase + BCFOLDER_UNKNOWN;
+		}
+
 		FolderContentStatus status = m_pCoordinator->ComputeFolderContentStatus(di);
 		switch (status)
 		{
@@ -657,6 +918,9 @@ int CDirPaneView::GetPaneColImage(const DIFFITEM &di) const
 			return s_nBcFolderIconBase + BCFOLDER_ORPHAN;
 		case FOLDER_STATUS_MIXED:
 			return s_nBcFolderIconBase + BCFOLDER_MIXED;
+		case FOLDER_STATUS_UNKNOWN:
+			// Unknown status with children means still scanning — show pending
+			return s_nBcFolderIconBase + BCFOLDER_PENDING;
 		default:
 			return s_nBcFolderIconBase + BCFOLDER_UNKNOWN;
 		}
@@ -666,9 +930,94 @@ int CDirPaneView::GetPaneColImage(const DIFFITEM &di) const
 }
 
 /**
- * @brief Custom draw handler for row coloring
+ * @brief Get icon for a specific side of a row.
+ *
+ * For non-directory items, returns the same as GetItemIcon.
+ * For directories present on both sides, uses per-side status:
+ * - Only shows BCFOLDER_MIXED if THIS side has both orphans and diffs.
+ * - A left-only orphan counts as an orphan on the left side only.
+ * - A right-only orphan counts as an orphan on the right side only.
+ * - Diffs (files on both sides with different content) count for both sides.
+ *
+ * @param side 0=left, 1=right
  */
-void CDirPaneView::OnCustomDraw(NMHDR* pNMHDR, LRESULT* pResult)
+int CDirSxSUnifiedView::GetItemIconForSide(int nRow, int side) const
+{
+	if (nRow < 0 || nRow >= static_cast<int>(m_listViewItems.size()))
+		return -1;
+
+	DIFFITEM *key = reinterpret_cast<DIFFITEM*>(m_listViewItems[nRow].lParam);
+	if (!key)
+		return -1;
+
+	if (!GetDocument()->HasDiffs())
+		return -1;
+
+	const CDiffContext &ctxt = GetDiffContext();
+	const DIFFITEM &di = ctxt.GetDiffAt(key);
+
+	// Non-directory or no BC icons: same as GetItemIcon
+	if (!di.diffcode.isDirectory() || s_nBcFolderIconBase < 0)
+		return GetItemIcon(nRow);
+
+	// Directory special cases
+	if (di.diffcode.isResultError())
+		return DIFFIMG_ERROR;
+	if (di.diffcode.isResultAbort())
+		return DIFFIMG_ABORT;
+	if (di.diffcode.isResultFiltered())
+		return DIFFIMG_DIRSKIP;
+
+	// Orphan folder (doesn't exist on both sides)
+	if (!IsItemExistAll(ctxt, di))
+		return s_nBcFolderIconBase + BCFOLDER_ORPHAN;
+
+	// Folder on both sides — check per-side content status
+	if (m_pCoordinator)
+	{
+		// Only show PENDING if not yet scanned (no children AND no compare flags)
+		if (!di.HasChildren() &&
+			(di.diffcode.diffcode & DIFFCODE::COMPAREFLAGS) == DIFFCODE::NOCMP)
+		{
+			return s_nBcFolderIconBase + BCFOLDER_PENDING;
+		}
+
+		// Scanned-but-empty folder: use compare flags directly
+		if (!di.HasChildren())
+		{
+			if (di.diffcode.isResultSame())
+				return s_nBcFolderIconBase + BCFOLDER_IDENTICAL;
+			else if (di.diffcode.isResultDiff())
+				return s_nBcFolderIconBase + BCFOLDER_DIFFERENT;
+			else
+				return s_nBcFolderIconBase + BCFOLDER_UNKNOWN;
+		}
+
+		FolderContentStatus status = m_pCoordinator->ComputeFolderContentStatusForSide(di, side);
+		switch (status)
+		{
+		case FOLDER_STATUS_ALL_SAME:
+			return s_nBcFolderIconBase + BCFOLDER_IDENTICAL;
+		case FOLDER_STATUS_ALL_DIFFERENT:
+			return s_nBcFolderIconBase + BCFOLDER_DIFFERENT;
+		case FOLDER_STATUS_UNIQUE_ONLY:
+			return s_nBcFolderIconBase + BCFOLDER_ORPHAN;
+		case FOLDER_STATUS_MIXED:
+			return s_nBcFolderIconBase + BCFOLDER_MIXED;
+		case FOLDER_STATUS_UNKNOWN:
+			return s_nBcFolderIconBase + BCFOLDER_PENDING;
+		default:
+			return s_nBcFolderIconBase + BCFOLDER_UNKNOWN;
+		}
+	}
+
+	return s_nBcFolderIconBase + BCFOLDER_UNKNOWN;
+}
+
+/////////////////////////////////////////////////////////////////////////////
+// Custom draw — per-subitem coloring
+
+void CDirSxSUnifiedView::OnCustomDraw(NMHDR* pNMHDR, LRESULT* pResult)
 {
 	if (!m_bUseColors)
 		return;
@@ -683,7 +1032,6 @@ void CDirPaneView::OnCustomDraw(NMHDR* pNMHDR, LRESULT* pResult)
 	}
 	if (lpC->nmcd.dwDrawStage == CDDS_ITEMPREPAINT)
 	{
-		// Check if item is a directory — use bold font + status-based color
 		int nRow = static_cast<int>(lpC->nmcd.dwItemSpec);
 		if (nRow >= 0 && nRow < static_cast<int>(m_listViewItems.size()))
 		{
@@ -737,19 +1085,194 @@ void CDirPaneView::OnCustomDraw(NMHDR* pNMHDR, LRESULT* pResult)
 	}
 	if (lpC->nmcd.dwDrawStage == (CDDS_ITEMPREPAINT | CDDS_SUBITEM))
 	{
-		GetColors(static_cast<int>(lpC->nmcd.dwItemSpec), lpC->iSubItem, lpC->clrTextBk, lpC->clrText);
+		int nRow = static_cast<int>(lpC->nmcd.dwItemSpec);
+		int nSubItem = lpC->iSubItem;
+		COLORREF clrBk, clrText;
+		GetColors(nRow, nSubItem, clrBk, clrText);
+
+		bool bSelected = (m_pList->GetItemState(nRow, LVIS_SELECTED) & LVIS_SELECTED) != 0;
+
+		// ---------------------------------------------------------------
+		// SELECTED ROWS: We must take full control of drawing (CDRF_SKIPDEFAULT)
+		// because LVS_EX_FULLROWSELECT + Windows themes paint the selection
+		// highlight across the entire row, ignoring clrTextBk overrides.
+		// We paint each cell ourselves: highlight on the active side,
+		// normal background on the inactive side.
+		// ---------------------------------------------------------------
+		if (bSelected)
+		{
+			bool bFocused = (GetFocus() == m_pList);
+			int colSide = GetColumnSide(nSubItem);
+			bool bOnActiveSide = (colSide == m_nActiveSide) || (colSide == -1);
+
+			COLORREF bgColor, textColor;
+			if (bOnActiveSide)
+			{
+				bgColor = bFocused ? GetSysColor(COLOR_HIGHLIGHT) : GetSysColor(COLOR_BTNFACE);
+				textColor = bFocused ? GetSysColor(COLOR_HIGHLIGHTTEXT) : GetSysColor(COLOR_BTNTEXT);
+			}
+			else
+			{
+				bgColor = clrBk;
+				textColor = clrText;
+			}
+
+			// Get the cell rectangle
+			RECT rc;
+			if (nSubItem == 0)
+			{
+				// Column 0: GetSubItemRect returns the entire row; clip to column width
+				ListView_GetItemRect(m_pList->m_hWnd, nRow, &rc, LVIR_BOUNDS);
+				rc.right = rc.left + m_pList->GetColumnWidth(0);
+			}
+			else
+			{
+				ListView_GetSubItemRect(m_pList->m_hWnd, nRow, nSubItem, LVIR_BOUNDS, &rc);
+			}
+
+			// Fill background — paints over any theme-drawn selection highlight
+			HBRUSH hBr = CreateSolidBrush(bgColor);
+			FillRect(lpC->nmcd.hdc, &rc, hBr);
+			DeleteObject(hBr);
+
+			int iconW = GetSystemMetrics(SM_CXSMICON);
+			int indent = (nRow >= 0 && nRow < (int)m_listViewItems.size())
+				? m_listViewItems[nRow].iIndent : 0;
+			int indentPx = indent * iconW;
+
+			// Name columns: draw icon + indented text
+			if (nSubItem == COL_LEFT_NAME || nSubItem == COL_RIGHT_NAME)
+			{
+				int side = (nSubItem == COL_LEFT_NAME) ? 0 : 1;
+				DIFFITEM *key = (nRow >= 0 && nRow < (int)m_listViewItems.size())
+					? reinterpret_cast<DIFFITEM*>(m_listViewItems[nRow].lParam) : nullptr;
+				if (key && GetDocument()->HasDiffs())
+				{
+					const CDiffContext &ctxt = GetDiffContext();
+					const DIFFITEM &di = ctxt.GetDiffAt(key);
+					int sideIdx = (side == 0) ? 0 : (ctxt.GetCompareDirs() - 1);
+					if (di.diffcode.exists(sideIdx))
+					{
+						int iImage = GetItemIconForSide(nRow, side);
+						if (iImage >= 0)
+						{
+							ImageList_Draw(m_imageList.GetSafeHandle(), iImage,
+								lpC->nmcd.hdc,
+								rc.left + indentPx + 2,
+								rc.top + (rc.bottom - rc.top - iconW) / 2,
+								ILD_TRANSPARENT);
+						}
+					}
+				}
+
+				RECT rcText = rc;
+				rcText.left += indentPx + iconW + 4;
+				String text = GetCellText(nRow, nSubItem);
+				if (!text.empty())
+				{
+					SetBkMode(lpC->nmcd.hdc, TRANSPARENT);
+					SetTextColor(lpC->nmcd.hdc, textColor);
+					DrawText(lpC->nmcd.hdc, text.c_str(), (int)text.length(),
+						&rcText, DT_LEFT | DT_VCENTER | DT_SINGLELINE | DT_NOPREFIX | DT_END_ELLIPSIS);
+				}
+			}
+			else
+			{
+				// Size / Modified / Cmp columns: text only
+				String text = GetCellText(nRow, nSubItem);
+				if (!text.empty())
+				{
+					RECT rcText = rc;
+					rcText.left += 4;
+					rcText.right -= 2;
+
+					UINT fmt = DT_SINGLELINE | DT_VCENTER | DT_NOPREFIX | DT_END_ELLIPSIS;
+					if (nSubItem == COL_LEFT_SIZE || nSubItem == COL_RIGHT_SIZE)
+						fmt |= DT_RIGHT;
+					else if (nSubItem == COL_CMP)
+						fmt |= DT_CENTER;
+					else
+						fmt |= DT_LEFT;
+
+					SetBkMode(lpC->nmcd.hdc, TRANSPARENT);
+					SetTextColor(lpC->nmcd.hdc, textColor);
+					DrawText(lpC->nmcd.hdc, text.c_str(), (int)text.length(),
+						&rcText, fmt);
+				}
+			}
+
+			*pResult = CDRF_SKIPDEFAULT;
+			return;
+		}
+
+		// ---------------------------------------------------------------
+		// NON-SELECTED ROWS: let the listview draw with our colors,
+		// except COL_RIGHT_NAME which needs custom indent drawing.
+		// ---------------------------------------------------------------
+		lpC->clrTextBk = clrBk;
+		lpC->clrText = clrText;
+
+		if (nSubItem == COL_RIGHT_NAME && nRow >= 0 && nRow < (int)m_listViewItems.size())
+		{
+			int indent = m_listViewItems[nRow].iIndent;
+			if (indent > 0)
+			{
+				int iconW = GetSystemMetrics(SM_CXSMICON);
+				int indentPx = indent * iconW;
+
+				RECT rc;
+				ListView_GetSubItemRect(m_pList->m_hWnd, nRow, nSubItem, LVIR_BOUNDS, &rc);
+
+				COLORREF bgColor = lpC->clrTextBk;
+				COLORREF textColor = lpC->clrText;
+
+				HBRUSH hBr = CreateSolidBrush(bgColor);
+				FillRect(lpC->nmcd.hdc, &rc, hBr);
+				DeleteObject(hBr);
+
+				DIFFITEM *key = reinterpret_cast<DIFFITEM*>(m_listViewItems[nRow].lParam);
+				if (key && GetDocument()->HasDiffs())
+				{
+					const CDiffContext &ctxt = GetDiffContext();
+					const DIFFITEM &di = ctxt.GetDiffAt(key);
+					int side = ctxt.GetCompareDirs() - 1;
+					if (di.diffcode.exists(side))
+					{
+						int iImage = GetItemIconForSide(nRow, 1);
+						if (iImage >= 0)
+						{
+							ImageList_Draw(m_imageList.GetSafeHandle(), iImage,
+								lpC->nmcd.hdc,
+								rc.left + indentPx + 2,
+								rc.top + (rc.bottom - rc.top - iconW) / 2,
+								ILD_TRANSPARENT);
+						}
+
+						RECT rcText = rc;
+						rcText.left += indentPx + iconW + 4;
+						String text = GetCellText(nRow, nSubItem);
+						SetBkMode(lpC->nmcd.hdc, TRANSPARENT);
+						SetTextColor(lpC->nmcd.hdc, textColor);
+						DrawText(lpC->nmcd.hdc, text.c_str(), (int)text.length(),
+							&rcText, DT_LEFT | DT_VCENTER | DT_SINGLELINE | DT_NOPREFIX | DT_END_ELLIPSIS);
+					}
+				}
+
+				*pResult = CDRF_SKIPDEFAULT;
+				return;
+			}
+		}
 	}
 }
 
 /**
  * @brief Custom draw handler for the column header control (dark theme).
  */
-void CDirPaneView::OnHeaderCustomDraw(NMHDR* pNMHDR, LRESULT* pResult)
+void CDirSxSUnifiedView::OnHeaderCustomDraw(NMHDR* pNMHDR, LRESULT* pResult)
 {
 	LPNMCUSTOMDRAW lpCD = (LPNMCUSTOMDRAW)pNMHDR;
 	*pResult = CDRF_DODEFAULT;
 
-	// Only handle the header control (child of the list)
 	if (!m_pList || lpCD->hdr.hwndFrom != ListView_GetHeader(m_pList->m_hWnd))
 		return;
 
@@ -760,10 +1283,8 @@ void CDirPaneView::OnHeaderCustomDraw(NMHDR* pNMHDR, LRESULT* pResult)
 	}
 	if (lpCD->dwDrawStage == CDDS_ITEMPREPAINT)
 	{
-		// Fill background with dark color
 		::FillRect(lpCD->hdc, &lpCD->rc, (HBRUSH)::CreateSolidBrush(BcColors::COLHDR_BG));
 
-		// Draw bottom border
 		HPEN hPen = ::CreatePen(PS_SOLID, 1, BcColors::BORDER);
 		HPEN hOld = (HPEN)::SelectObject(lpCD->hdc, hPen);
 		::MoveToEx(lpCD->hdc, lpCD->rc.left, lpCD->rc.bottom - 1, nullptr);
@@ -771,7 +1292,6 @@ void CDirPaneView::OnHeaderCustomDraw(NMHDR* pNMHDR, LRESULT* pResult)
 		::SelectObject(lpCD->hdc, hOld);
 		::DeleteObject(hPen);
 
-		// Get header item text
 		HDITEM hdi = {};
 		tchar_t szText[128] = {};
 		hdi.mask = HDI_TEXT;
@@ -779,12 +1299,19 @@ void CDirPaneView::OnHeaderCustomDraw(NMHDR* pNMHDR, LRESULT* pResult)
 		hdi.cchTextMax = _countof(szText);
 		Header_GetItem(lpCD->hdr.hwndFrom, (int)lpCD->dwItemSpec, &hdi);
 
-		// Draw text with light color
 		::SetBkMode(lpCD->hdc, TRANSPARENT);
 		::SetTextColor(lpCD->hdc, BcColors::TEXT_HEADER);
 		CRect rcText = lpCD->rc;
 		rcText.DeflateRect(4, 0);
-		::DrawText(lpCD->hdc, szText, -1, &rcText, DT_LEFT | DT_VCENTER | DT_SINGLELINE | DT_END_ELLIPSIS);
+
+		// Center-align the Cmp column header
+		UINT fmt = DT_VCENTER | DT_SINGLELINE | DT_END_ELLIPSIS;
+		if ((int)lpCD->dwItemSpec == COL_CMP)
+			fmt |= DT_CENTER;
+		else
+			fmt |= DT_LEFT;
+
+		::DrawText(lpCD->hdc, szText, -1, &rcText, fmt);
 
 		*pResult = CDRF_SKIPDEFAULT;
 		return;
@@ -792,13 +1319,19 @@ void CDirPaneView::OnHeaderCustomDraw(NMHDR* pNMHDR, LRESULT* pResult)
 }
 
 /**
- * @brief Get colors for an item row — Beyond Compare dark theme.
- * Dark alternating row backgrounds with status-colored text.
+ * @brief Get colors for an item at a specific subitem (column).
+ *
+ * Key difference from CDirPaneView: per-subitem coloring.
+ * - Left columns (0-2): colored by the left-side file status.
+ * - Right columns (4-6): colored by the right-side file status.
+ * - Center column (3): neutral.
+ * - Missing side: dimmed background, no text.
  */
-void CDirPaneView::GetColors(int nRow, int nCol, COLORREF& clrBk, COLORREF& clrText) const
+void CDirSxSUnifiedView::GetColors(int nRow, int nCol, COLORREF& clrBk, COLORREF& clrText) const
 {
-	// Dark alternating rows
-	clrBk = (nRow & 1) ? BcColors::BG_ALT : BcColors::BG_DARK;
+	// Dark alternating rows (only when row stripes enabled)
+	bool bOddRow = m_bRowStripes && (nRow & 1) != 0;
+	clrBk = bOddRow ? BcColors::BG_ALT : BcColors::BG_DARK;
 	clrText = BcColors::TEXT_NORMAL;
 
 	if (nRow < 0 || nRow >= static_cast<int>(m_listViewItems.size()))
@@ -807,7 +1340,6 @@ void CDirPaneView::GetColors(int nRow, int nCol, COLORREF& clrBk, COLORREF& clrT
 	DIFFITEM *key = reinterpret_cast<DIFFITEM*>(m_listViewItems[nRow].lParam);
 	if (key == nullptr)
 	{
-		// Placeholder row — invisible text
 		clrText = clrBk;
 		return;
 	}
@@ -817,42 +1349,70 @@ void CDirPaneView::GetColors(int nRow, int nCol, COLORREF& clrBk, COLORREF& clrT
 
 	const CDiffContext &ctxt = GetDiffContext();
 	const DIFFITEM &di = ctxt.GetDiffAt(key);
+	int nDirs = ctxt.GetCompareDirs();
 
-	if (di.isEmpty())
+	// Determine which side this column belongs to
+	int colSide = GetColumnSide(nCol);
+
+	// For the center "Cmp" column, use neutral colors based on overall status
+	if (colSide == -1)
 	{
-		// Empty item — default colors
+		if (di.isEmpty() || di.diffcode.isDirectory())
+			return;
+
+		if (di.diffcode.isResultFiltered())
+			clrText = BcColors::TEXT_FILTERED;
+		else if (!IsItemExistAll(ctxt, di))
+			clrText = BcColors::TEXT_ORPHAN;
+		else if (di.diffcode.isResultDiff())
+			clrText = BcColors::TEXT_DIFF;
+		// else: identical — keep TEXT_NORMAL
+		return;
 	}
-	else if (di.diffcode.isResultFiltered())
+
+	// Map column side (0=left, 1=right) to DIFFITEM side index
+	int side = (colSide == 0) ? 0 : (nDirs - 1);
+
+	// Check if item exists on this side
+	if (!di.diffcode.exists(side))
+	{
+		// Missing side — dimmed background, invisible text
+		clrBk = bOddRow ? BcColors::BG_MISSING_ALT : BcColors::BG_MISSING;
+		clrText = clrBk; // invisible
+		return;
+	}
+
+	// Item exists on this side — color by status
+	if (di.isEmpty())
+		return;
+
+	if (di.diffcode.isResultFiltered())
 	{
 		clrText = BcColors::TEXT_FILTERED;
 	}
 	else if (!IsItemExistAll(ctxt, di))
 	{
-		// Orphan (left-only or right-only)
+		// Orphan — this side exists but the other doesn't
 		clrText = BcColors::TEXT_ORPHAN;
 	}
 	else if (di.diffcode.isResultDiff())
 	{
-		// Different files — all red regardless of timestamp
 		clrText = BcColors::TEXT_DIFF;
 	}
 	// else: identical — keep TEXT_NORMAL (white)
 }
 
-/**
- * @brief Get the DIFFITEM key for a given list index
- */
-DIFFITEM* CDirPaneView::GetItemKey(int idx) const
+/////////////////////////////////////////////////////////////////////////////
+// Data management
+
+DIFFITEM* CDirSxSUnifiedView::GetItemKey(int idx) const
 {
 	if (idx < 0 || idx >= static_cast<int>(m_listViewItems.size()))
 		return nullptr;
 	return reinterpret_cast<DIFFITEM*>(m_listViewItems[idx].lParam);
 }
 
-/**
- * @brief Delete all display items from the list
- */
-void CDirPaneView::DeleteAllDisplayItems()
+void CDirSxSUnifiedView::DeleteAllDisplayItems()
 {
 	m_listViewItems.clear();
 	if (m_pList && m_pList->GetSafeHwnd())
@@ -863,14 +1423,15 @@ void CDirPaneView::DeleteAllDisplayItems()
 }
 
 /**
- * @brief Called by coordinator to update this pane's display from the row mapping.
+ * @brief Update the unified view from the coordinator's row mapping.
+ * Every row has a DIFFITEM pointer (no placeholders in unified view
+ * since both sides are shown in the same row).
  */
-void CDirPaneView::UpdateFromRowMapping()
+void CDirSxSUnifiedView::UpdateFromRowMapping()
 {
 	if (!m_pCoordinator || !m_pList)
 		return;
 
-	// Invalidate per-draw caches
 	m_nCachedToleranceSecs = -1;
 
 	m_pList->SetRedraw(FALSE);
@@ -881,21 +1442,12 @@ void CDirPaneView::UpdateFromRowMapping()
 	{
 		const auto& row = rowMapping[i];
 		ListViewOwnerDataItem item;
-		bool existsOnThisPane = (m_nThisPane == 0) ? row.existsOnLeft : row.existsOnRight;
 
-		if (existsOnThisPane)
-		{
-			item.lParam = reinterpret_cast<LPARAM>(row.diffpos);
-			item.iImage = I_IMAGECALLBACK;
-			item.iIndent = row.indent;
-		}
-		else
-		{
-			// Placeholder row
-			item.lParam = 0;
-			item.iImage = -1;
-			item.iIndent = 0;
-		}
+		// In unified view, every row has the DIFFITEM (no placeholders)
+		item.lParam = reinterpret_cast<LPARAM>(row.diffpos);
+		item.iImage = I_IMAGECALLBACK;
+		item.iIndent = row.indent;
+
 		m_listViewItems.push_back(item);
 	}
 
@@ -904,12 +1456,10 @@ void CDirPaneView::UpdateFromRowMapping()
 	m_pList->Invalidate();
 }
 
-/**
- * @brief Handle NM_DBLCLK notification for double-click on list items.
- * This is the primary handler for double-clicks — more reliable than
- * WM_LBUTTONDBLCLK for CListView with LVS_OWNERDATA.
- */
-void CDirPaneView::OnDblClick(NMHDR* pNMHDR, LRESULT* pResult)
+/////////////////////////////////////////////////////////////////////////////
+// Event handlers — double-click, key, size, timer
+
+void CDirSxSUnifiedView::OnDblClick(NMHDR* pNMHDR, LRESULT* pResult)
 {
 	LPNMITEMACTIVATE pNMIA = reinterpret_cast<LPNMITEMACTIVATE>(pNMHDR);
 	*pResult = 0;
@@ -931,12 +1481,8 @@ void CDirPaneView::OnDblClick(NMHDR* pNMHDR, LRESULT* pResult)
 	OpenSelectedItem();
 }
 
-/**
- * @brief Fallback handler for WM_LBUTTONDBLCLK.
- */
-void CDirPaneView::OnLButtonDblClk(UINT nFlags, CPoint point)
+void CDirSxSUnifiedView::OnLButtonDblClk(UINT nFlags, CPoint point)
 {
-	// NM_DBLCLK handles the main logic; this is a fallback
 	LVHITTESTINFO lvhti;
 	lvhti.pt = point;
 	m_pList->SubItemHitTest(&lvhti);
@@ -956,23 +1502,44 @@ void CDirPaneView::OnLButtonDblClk(UINT nFlags, CPoint point)
 	}
 }
 
-void CDirPaneView::OnSize(UINT nType, int cx, int cy)
+void CDirSxSUnifiedView::OnSize(UINT nType, int cx, int cy)
 {
 	__super::OnSize(nType, cx, cy);
+
+	if (!m_pList || !m_pList->GetSafeHwnd() || m_bResizing)
+		return;
+
+	CRect rc;
+	m_pList->GetClientRect(&rc);
+	int totalW = rc.Width();
+	if (totalW < 100)
+		return;
+
+	m_bResizing = true;
+
+	int cmpW = 30;
+	int halfW = (totalW - cmpW) / 2;
+	int nameW = halfW * 50 / 100;
+	int sizeW = halfW * 20 / 100;
+	int modW  = halfW - nameW - sizeW;
+
+	m_pList->SetColumnWidth(COL_LEFT_NAME, nameW);
+	m_pList->SetColumnWidth(COL_LEFT_SIZE, sizeW);
+	m_pList->SetColumnWidth(COL_LEFT_MODIFIED, modW);
+	m_pList->SetColumnWidth(COL_CMP, cmpW);
+	m_pList->SetColumnWidth(COL_RIGHT_NAME, nameW);
+	m_pList->SetColumnWidth(COL_RIGHT_SIZE, sizeW);
+	m_pList->SetColumnWidth(COL_RIGHT_MODIFIED, modW);
+
+	m_bResizing = false;
 }
 
 /**
  * @brief Handle UI update messages from the diff thread.
- * Only the left pane (pane 0) processes these messages to avoid
- * double-processing. It triggers redisplay through the coordinator.
  */
-LRESULT CDirPaneView::OnUpdateUIMessage(WPARAM wParam, LPARAM lParam)
+LRESULT CDirSxSUnifiedView::OnUpdateUIMessage(WPARAM wParam, LPARAM lParam)
 {
 	UNREFERENCED_PARAMETER(lParam);
-
-	// Only process on the left pane to avoid double-processing
-	if (m_nThisPane != 0)
-		return 0;
 
 	CDirDoc *pDoc = GetDocument();
 	if (pDoc == nullptr || m_pCoordinator == nullptr)
@@ -981,49 +1548,67 @@ LRESULT CDirPaneView::OnUpdateUIMessage(WPARAM wParam, LPARAM lParam)
 	if (wParam == CDiffThread::EVENT_COMPARE_COMPLETED)
 	{
 		pDoc->CompareReady();
-
 		if (!pDoc->GetGeneratingReport())
 			m_pCoordinator->Redisplay();
-
+		m_pCoordinator->SetScanningInProgress(false);
 		CDirFrame *pFrame = GetParentFrame();
 		if (pFrame)
+		{
 			pFrame->HideScanProgressBar();
+			// Log completion with summary
+			const auto& counts = m_pCoordinator->GetStatusCounts();
+			String msg = strutils::format(
+				_T("Comparison complete. %d items: %d identical, %d different, %d left orphans, %d right orphans."),
+				counts.nTotal, counts.nIdentical, counts.nDifferent,
+				counts.nOrphanLeft, counts.nOrphanRight);
+			pFrame->GetLogPanel().AppendMessage(msg);
+			pFrame->SetStatus(m_pCoordinator->FormatStatusString().c_str());
+		}
 	}
 	else if (wParam == CDiffThread::EVENT_COMPARE_PROGRESSED)
 	{
-		// Throttle progress updates — at most once per 500ms to avoid
-		// full tree rebuild on every 2-second progress event
-		if (!m_bRedisplayPending)
-		{
-			m_bRedisplayPending = true;
-			SetTimer(TIMER_REDISPLAY, 500, nullptr);
-		}
-
+		// Throttle progress updates — redisplay at most every 500ms
+		SetTimer(TIMER_REDISPLAY, 500, nullptr);
 		CDirFrame *pFrame = GetParentFrame();
 		if (pFrame)
+		{
 			pFrame->UpdateScanProgressBar();
+			// Update status text with progress
+			const CDiffContext &ctxt = pDoc->GetDiffContext();
+			if (ctxt.m_pCompareStats)
+			{
+				int nDone = ctxt.m_pCompareStats->GetComparedItems();
+				int nTotal = ctxt.m_pCompareStats->GetTotalItems();
+				if (nTotal > 0)
+				{
+					String statusMsg = strutils::format(_T("Comparing items... %d / %d"), nDone, nTotal);
+					pFrame->SetStatus(statusMsg.c_str());
+				}
+			}
+		}
 	}
 	else if (wParam == CDiffThread::EVENT_COLLECT_COMPLETED)
 	{
+		m_pCoordinator->SetScanningInProgress(true);
 		m_pCoordinator->Redisplay();
-
 		CDirFrame *pFrame = GetParentFrame();
 		if (pFrame)
+		{
+			// Switch from marquee (scan phase) to determinate (compare phase)
 			pFrame->SetScanProgressDeterminate();
+			pFrame->GetLogPanel().AppendMessage(_T("Scanning complete. Starting comparison..."));
+			pFrame->SetStatus(_T("Scanning complete. Comparing items..."));
+		}
 	}
 
 	return 0;
 }
 
-/**
- * @brief Timer handler for throttled redisplay during comparison progress.
- */
-void CDirPaneView::OnTimer(UINT_PTR nIDEvent)
+void CDirSxSUnifiedView::OnTimer(UINT_PTR nIDEvent)
 {
 	if (nIDEvent == TIMER_REDISPLAY)
 	{
 		KillTimer(TIMER_REDISPLAY);
-		m_bRedisplayPending = false;
 		if (m_pCoordinator)
 			m_pCoordinator->Redisplay();
 	}
@@ -1033,138 +1618,13 @@ void CDirPaneView::OnTimer(UINT_PTR nIDEvent)
 	}
 }
 
-/**
- * @brief Open comparison for the first selected item on this pane.
- * Uses GetMainFrame()->DoFileOrFolderOpen() to open files or subfolders.
- */
-void CDirPaneView::OpenSelectedItem()
+/////////////////////////////////////////////////////////////////////////////
+// Keyboard handler
+
+void CDirSxSUnifiedView::OnKeyDown(UINT nChar, UINT nRepCnt, UINT nFlags)
 {
-	if (!m_pCoordinator)
-		return;
-
-	CDirDoc *pDoc = GetDocument();
-	if (!pDoc || !pDoc->HasDiffs())
-		return;
-
-	const CDiffContext &ctxt = GetDiffContext();
-
-	// Find selected item
-	int nItem = m_pList->GetNextItem(-1, LVNI_SELECTED);
-	if (nItem < 0)
-		return;
-
-	DIFFITEM *key = GetItemKey(nItem);
-	if (!key)
-		return;
-
-	const DIFFITEM &di = ctxt.GetDiffAt(key);
-
-	if (di.diffcode.isDirectory())
-	{
-		// Directory: toggle expand/collapse
-		ToggleExpandSubdir(nItem);
-		return;
-	}
-
-	// Build full paths for all sides (same as CDirView::OpenSelection)
-	PathContext paths = GetItemFileNames(ctxt, di);
-	int nDirs = ctxt.GetCompareDirs();
-
-	// For orphan files (only on one side), use NUL device for the missing side
-	const String sUntitled[] = { _("Untitled Left"),
-		nDirs < 3 ? _("Untitled Right") : _("Untitled Middle"),
-		_("Untitled Right") };
-	PathContext filteredPaths;
-	FileLocation fileloc[3];
-	String strDesc[3];
-	fileopenflags_t dwFlags[3] = {};
-
-	for (int i = 0; i < nDirs; i++)
-	{
-		dwFlags[i] = FFILEOPEN_NOMRU | (pDoc->GetReadOnly(i) ? FFILEOPEN_READONLY : 0);
-		if (di.diffcode.exists(i) && paths::DoesPathExist(paths[i]) != paths::DOES_NOT_EXIST)
-		{
-			fileloc[i].setPath(paths[i]);
-			fileloc[i].encoding = di.diffFileInfo[i].encoding;
-			filteredPaths.SetPath(filteredPaths.GetSize(), paths[i], false);
-		}
-		else
-		{
-			strDesc[i] = sUntitled[i];
-			filteredPaths.SetPath(filteredPaths.GetSize(), paths::NATIVE_NULL_DEVICE_NAME, false);
-		}
-	}
-
-	PackingInfo *infoUnpacker = nullptr;
-	PrediffingInfo *infoPrediffer = nullptr;
-	String filteredFilenames = CDiffContext::GetFilteredFilenames(filteredPaths);
-	GetDiffContext().FetchPluginInfos(filteredFilenames, &infoUnpacker, &infoPrediffer);
-
-	GetMainFrame()->ShowAutoMergeDoc(0, pDoc, nDirs, fileloc,
-		dwFlags, strDesc, _T(""), infoUnpacker, infoPrediffer);
-}
-
-/**
- * @brief Open cross-comparison: compare one selected file from each pane.
- */
-void CDirPaneView::OpenCrossComparison()
-{
-	if (!m_pCoordinator)
-		return;
-
-	CDirDoc *pDoc = GetDocument();
-	if (!pDoc || !pDoc->HasDiffs())
-		return;
-
-	const CDiffContext &ctxt = GetDiffContext();
-
-	// Get selections from both panes
-	std::vector<DIFFITEM*> leftItems, rightItems;
-	m_pCoordinator->GetSelectedItems(0, leftItems);
-	m_pCoordinator->GetSelectedItems(1, rightItems);
-
-	if (leftItems.empty() || rightItems.empty())
-		return;
-
-	const DIFFITEM &diLeft = ctxt.GetDiffAt(leftItems[0]);
-	const DIFFITEM &diRight = ctxt.GetDiffAt(rightItems[0]);
-
-	// Build paths: left item's left-side path vs right item's right-side path
-	PathContext paths;
-	int leftSide = 0;
-	int rightSide = ctxt.GetCompareDirs() - 1;
-
-	String leftPath = diLeft.getFilepath(leftSide, ctxt.GetPath(leftSide));
-	String rightPath = diRight.getFilepath(rightSide, ctxt.GetPath(rightSide));
-
-	paths.SetPath(0, leftPath);
-	paths.SetPath(1, rightPath);
-
-	fileopenflags_t dwFlags[3] = {};
-	GetMainFrame()->DoFileOrFolderOpen(&paths, dwFlags, nullptr, _T(""), false, nullptr);
-}
-
-/**
- * @brief Handle keyboard shortcuts in the pane view.
- * Tab switches between panes, Enter opens comparison.
- */
-void CDirPaneView::OnKeyDown(UINT nChar, UINT nRepCnt, UINT nFlags)
-{
-	if (nChar == VK_TAB && m_pCoordinator)
-	{
-		// Switch focus to the other pane
-		CDirPaneView *pOtherPane = (m_nThisPane == 0) ?
-			m_pCoordinator->GetRightPaneView() : m_pCoordinator->GetLeftPaneView();
-		if (pOtherPane)
-		{
-			m_pCoordinator->SetActivePane(pOtherPane->GetPaneIndex());
-			pOtherPane->SetFocus();
-		}
-		return;
-	}
 	if (nChar == VK_RETURN)
 	{
-		// If focused item is a directory, toggle expand; otherwise open file comparison
 		int nItem = m_pList->GetNextItem(-1, LVNI_FOCUSED);
 		if (nItem >= 0)
 		{
@@ -1206,15 +1666,33 @@ void CDirPaneView::OnKeyDown(UINT nChar, UINT nRepCnt, UINT nFlags)
 	__super::OnKeyDown(nChar, nRepCnt, nFlags);
 }
 
-/**
- * @brief Display context menu for the pane view.
- */
-void CDirPaneView::OnContextMenu(CWnd* pWnd, CPoint point)
+/////////////////////////////////////////////////////////////////////////////
+// Context menu — side-aware based on hit-tested column
+
+void CDirSxSUnifiedView::OnContextMenu(CWnd* pWnd, CPoint point)
 {
 	if (m_pList->GetItemCount() == 0)
 		return;
 
 	GetParentFrame()->ActivateFrame();
+
+	// Determine which side was right-clicked based on column hit-test
+	if (point.x != -1 && point.y != -1)
+	{
+		CPoint clientPt = point;
+		m_pList->ScreenToClient(&clientPt);
+
+		LVHITTESTINFO lvhti = {};
+		lvhti.pt = clientPt;
+		m_pList->SubItemHitTest(&lvhti);
+
+		int colSide = GetColumnSide(lvhti.iSubItem);
+		if (colSide == 0)
+			m_nContextSide = 0;
+		else if (colSide == 1)
+			m_nContextSide = 1;
+		// For center column, keep previous context side
+	}
 
 	CMenu menu;
 	menu.CreatePopupMenu();
@@ -1405,15 +1883,117 @@ void CDirPaneView::OnContextMenu(CWnd* pWnd, CPoint point)
 	menu.TrackPopupMenu(TPM_LEFTALIGN | TPM_RIGHTBUTTON, point.x, point.y, this);
 }
 
-// Phase 4: Swap sides handler
-void CDirPaneView::OnSxsSwapSides()
+/////////////////////////////////////////////////////////////////////////////
+// Open comparison
+
+void CDirSxSUnifiedView::OpenSelectedItem()
+{
+	if (!m_pCoordinator)
+		return;
+
+	CDirDoc *pDoc = GetDocument();
+	if (!pDoc || !pDoc->HasDiffs())
+		return;
+
+	const CDiffContext &ctxt = GetDiffContext();
+
+	int nItem = m_pList->GetNextItem(-1, LVNI_SELECTED);
+	if (nItem < 0)
+		return;
+
+	DIFFITEM *key = GetItemKey(nItem);
+	if (!key)
+		return;
+
+	const DIFFITEM &di = ctxt.GetDiffAt(key);
+
+	if (di.diffcode.isDirectory())
+	{
+		ToggleExpandSubdir(nItem);
+		return;
+	}
+
+	PathContext paths = GetItemFileNames(ctxt, di);
+	int nDirs = ctxt.GetCompareDirs();
+
+	const String sUntitled[] = { _("Untitled Left"),
+		nDirs < 3 ? _("Untitled Right") : _("Untitled Middle"),
+		_("Untitled Right") };
+	PathContext filteredPaths;
+	FileLocation fileloc[3];
+	String strDesc[3];
+	fileopenflags_t dwFlags[3] = {};
+
+	for (int i = 0; i < nDirs; i++)
+	{
+		dwFlags[i] = FFILEOPEN_NOMRU | (pDoc->GetReadOnly(i) ? FFILEOPEN_READONLY : 0);
+		if (di.diffcode.exists(i) && paths::DoesPathExist(paths[i]) != paths::DOES_NOT_EXIST)
+		{
+			fileloc[i].setPath(paths[i]);
+			fileloc[i].encoding = di.diffFileInfo[i].encoding;
+			filteredPaths.SetPath(filteredPaths.GetSize(), paths[i], false);
+		}
+		else
+		{
+			strDesc[i] = sUntitled[i];
+			filteredPaths.SetPath(filteredPaths.GetSize(), paths::NATIVE_NULL_DEVICE_NAME, false);
+		}
+	}
+
+	PackingInfo *infoUnpacker = nullptr;
+	PrediffingInfo *infoPrediffer = nullptr;
+	String filteredFilenames = CDiffContext::GetFilteredFilenames(filteredPaths);
+	GetDiffContext().FetchPluginInfos(filteredFilenames, &infoUnpacker, &infoPrediffer);
+
+	GetMainFrame()->ShowAutoMergeDoc(0, pDoc, nDirs, fileloc,
+		dwFlags, strDesc, _T(""), infoUnpacker, infoPrediffer);
+}
+
+void CDirSxSUnifiedView::OpenCrossComparison()
+{
+	if (!m_pCoordinator)
+		return;
+
+	CDirDoc *pDoc = GetDocument();
+	if (!pDoc || !pDoc->HasDiffs())
+		return;
+
+	const CDiffContext &ctxt = GetDiffContext();
+
+	std::vector<DIFFITEM*> leftItems, rightItems;
+	m_pCoordinator->GetSelectedItems(0, leftItems);
+	m_pCoordinator->GetSelectedItems(1, rightItems);
+
+	if (leftItems.empty() || rightItems.empty())
+		return;
+
+	const DIFFITEM &diLeft = ctxt.GetDiffAt(leftItems[0]);
+	const DIFFITEM &diRight = ctxt.GetDiffAt(rightItems[0]);
+
+	PathContext paths;
+	int leftSide = 0;
+	int rightSide = ctxt.GetCompareDirs() - 1;
+
+	String leftPath = diLeft.getFilepath(leftSide, ctxt.GetPath(leftSide));
+	String rightPath = diRight.getFilepath(rightSide, ctxt.GetPath(rightSide));
+
+	paths.SetPath(0, leftPath);
+	paths.SetPath(1, rightPath);
+
+	fileopenflags_t dwFlags[3] = {};
+	GetMainFrame()->DoFileOrFolderOpen(&paths, dwFlags, nullptr, _T(""), false, nullptr);
+}
+
+/////////////////////////////////////////////////////////////////////////////
+// Command handlers — swap, copy, move, open
+
+void CDirSxSUnifiedView::OnSxsSwapSides()
 {
 	if (m_pCoordinator)
 		m_pCoordinator->SwapSides();
 }
 
-// Phase 4: Copy to other side handler — native SxS file operation
-void CDirPaneView::OnSxsCopy()
+void CDirSxSUnifiedView::OnSxsCopy()
 {
 	if (!m_pCoordinator)
 		return;
@@ -1423,13 +2003,13 @@ void CDirPaneView::OnSxsCopy()
 		return;
 
 	std::vector<DIFFITEM*> items;
-	m_pCoordinator->GetSelectedItems(m_nThisPane, items);
+	m_pCoordinator->GetSelectedItems(m_nContextSide, items);
 	if (items.empty())
 		return;
 
 	const CDiffContext &ctxt = GetDiffContext();
-	int srcSide = m_nThisPane;
-	int dstSide = (m_nThisPane == 0) ? (ctxt.GetCompareDirs() - 1) : 0;
+	int srcSide = m_nContextSide;
+	int dstSide = (m_nContextSide == 0) ? (ctxt.GetCompareDirs() - 1) : 0;
 
 	ShellFileOperations fileOps;
 	for (auto *key : items)
@@ -1444,7 +2024,6 @@ void CDirPaneView::OnSxsCopy()
 			dstDir = paths::GetParentPath(di.getFilepath(dstSide, ctxt.GetPath(dstSide)));
 		else
 		{
-			// Build destination directory from source relative path
 			String relPath = di.diffFileInfo[srcSide].path;
 			dstDir = paths::ConcatPath(ctxt.GetPath(dstSide), relPath);
 		}
@@ -1461,8 +2040,7 @@ void CDirPaneView::OnSxsCopy()
 	}
 }
 
-// Phase 4: Move to other side handler — native SxS file operation
-void CDirPaneView::OnSxsMove()
+void CDirSxSUnifiedView::OnSxsMove()
 {
 	if (!m_pCoordinator)
 		return;
@@ -1472,13 +2050,13 @@ void CDirPaneView::OnSxsMove()
 		return;
 
 	std::vector<DIFFITEM*> items;
-	m_pCoordinator->GetSelectedItems(m_nThisPane, items);
+	m_pCoordinator->GetSelectedItems(m_nContextSide, items);
 	if (items.empty())
 		return;
 
 	const CDiffContext &ctxt = GetDiffContext();
-	int srcSide = m_nThisPane;
-	int dstSide = (m_nThisPane == 0) ? (ctxt.GetCompareDirs() - 1) : 0;
+	int srcSide = m_nContextSide;
+	int dstSide = (m_nContextSide == 0) ? (ctxt.GetCompareDirs() - 1) : 0;
 
 	ShellFileOperations fileOps;
 	for (auto *key : items)
@@ -1509,38 +2087,55 @@ void CDirPaneView::OnSxsMove()
 	}
 }
 
-// Phase 5: Open comparison for selected item
-void CDirPaneView::OnSxsOpenCompare()
+void CDirSxSUnifiedView::OnSxsOpenCompare()
 {
 	OpenSelectedItem();
 }
 
-// Phase 5: Cross-compare selected items from each pane
-void CDirPaneView::OnSxsCrossCompare()
+void CDirSxSUnifiedView::OnSxsCrossCompare()
 {
 	OpenCrossComparison();
 }
 
-// Phase 4: Enable commands only when items are selected
-void CDirPaneView::OnUpdateSxsNeedSelection(CCmdUI* pCmdUI)
+void CDirSxSUnifiedView::OnUpdateSxsNeedSelection(CCmdUI* pCmdUI)
 {
 	pCmdUI->Enable(m_pList && m_pList->GetSelectedCount() > 0);
 }
 
-/**
- * @brief Handle column header click -- sort both panes by the clicked column.
- * When the same column is clicked again, the sort direction is toggled.
- * For a new column, the default sort direction from DirViewColItems is used.
- * The coordinator stores the sort state and applies it during BuildRowMapping.
- */
-void CDirPaneView::OnColumnClick(NMHDR* pNMHDR, LRESULT* pResult)
+/////////////////////////////////////////////////////////////////////////////
+// Column header click — sort
+
+void CDirSxSUnifiedView::OnColumnClick(NMHDR* pNMHDR, LRESULT* pResult)
 {
 	*pResult = 0;
 	if (!m_pCoordinator || !m_pColItems)
 		return;
 
 	NM_LISTVIEW *pNMListView = (NM_LISTVIEW *)pNMHDR;
-	int sortcol = m_pColItems->ColPhysToLog(pNMListView->iSubItem);
+	int clickedCol = pNMListView->iSubItem;
+
+	// Map unified column to logical sort column
+	// For unified view, sort by the underlying property (Name, Size, Modified)
+	// Map columns 0,4 -> Name(0), 1,5 -> Size(2), 2,6 -> Modified(3), 3 -> ignore
+	int sortcol = -1;
+	switch (clickedCol)
+	{
+	case COL_LEFT_NAME:
+	case COL_RIGHT_NAME:
+		sortcol = 0; // Name
+		break;
+	case COL_LEFT_SIZE:
+	case COL_RIGHT_SIZE:
+		sortcol = 2; // Size
+		break;
+	case COL_LEFT_MODIFIED:
+	case COL_RIGHT_MODIFIED:
+		sortcol = 3; // Modified
+		break;
+	case COL_CMP:
+		return; // Can't sort by comparison indicator
+	}
+
 	if (sortcol < 0 || sortcol >= m_pColItems->GetColCount())
 		return;
 
@@ -1548,32 +2143,18 @@ void CDirPaneView::OnColumnClick(NMHDR* pNMHDR, LRESULT* pResult)
 	bool bAscending;
 	if (sortcol == oldSortCol)
 	{
-		// Same column -- toggle direction
 		bAscending = !m_pCoordinator->GetSortAscending();
 	}
 	else
 	{
-		// New column -- use default direction (most columns ascending, dates descending)
 		bAscending = m_pColItems->IsDefaultSortAscending(sortcol);
 	}
 
-	// Tell the coordinator to sort both panes (triggers Redisplay)
 	m_pCoordinator->SetSortColumn(sortcol, bAscending);
-
-	// Update sort header indicators on both panes
 	UpdateSortHeaderIndicator();
-	CDirPaneView *pOtherPane = (m_nThisPane == 0) ?
-		m_pCoordinator->GetRightPaneView() : m_pCoordinator->GetLeftPaneView();
-	if (pOtherPane)
-		pOtherPane->UpdateSortHeaderIndicator();
 }
 
-/**
- * @brief Update the sort header arrow indicator to match the coordinator's sort state.
- * Maps the coordinator's logical sort column to the physical column index
- * in this pane's column layout, then updates the CSortHeaderCtrl.
- */
-void CDirPaneView::UpdateSortHeaderIndicator()
+void CDirSxSUnifiedView::UpdateSortHeaderIndicator()
 {
 	if (!m_pCoordinator || !m_pColItems)
 		return;
@@ -1585,14 +2166,23 @@ void CDirPaneView::UpdateSortHeaderIndicator()
 		return;
 	}
 
-	int physCol = m_pColItems->ColLogToPhys(sortCol);
+	// Map logical sort column back to unified column for the header arrow
+	int physCol = -1;
+	switch (sortCol)
+	{
+	case 0: physCol = COL_LEFT_NAME; break;
+	case 2: physCol = COL_LEFT_SIZE; break;
+	case 3: physCol = COL_LEFT_MODIFIED; break;
+	default: physCol = -1; break;
+	}
+
 	m_ctlSortHeader.SetSortImage(physCol, m_pCoordinator->GetSortAscending());
 }
 
-/**
- * @brief Handle selection change -- sync selection to opposite pane, update gutter, and update status bar.
- */
-void CDirPaneView::OnItemChanged(NMHDR* pNMHDR, LRESULT* pResult)
+/////////////////////////////////////////////////////////////////////////////
+// Selection change — update status bar
+
+void CDirSxSUnifiedView::OnItemChanged(NMHDR* pNMHDR, LRESULT* pResult)
 {
 	NMLISTVIEW *pNMLV = (NMLISTVIEW *)pNMHDR;
 	*pResult = 0;
@@ -1602,62 +2192,8 @@ void CDirPaneView::OnItemChanged(NMHDR* pNMHDR, LRESULT* pResult)
 	if ((pNMLV->uNewState & LVIS_SELECTED) == (pNMLV->uOldState & LVIS_SELECTED))
 		return;
 
-	// Sync selection to the other pane (guard against recursion)
-	static bool bSyncing = false;
-	if (!bSyncing && m_pCoordinator)
-	{
-		bSyncing = true;
-		CDirPaneView *pOtherPane = (m_nThisPane == 0) ?
-			m_pCoordinator->GetRightPaneView() : m_pCoordinator->GetLeftPaneView();
-		if (pOtherPane)
-		{
-			CListCtrl &otherList = pOtherPane->GetListCtrl();
-			if (otherList.GetSafeHwnd())
-			{
-				int nItem = pNMLV->iItem;
-				if (pNMLV->uNewState & LVIS_SELECTED)
-					otherList.SetItemState(nItem, LVIS_SELECTED, LVIS_SELECTED);
-				else
-					otherList.SetItemState(nItem, 0, LVIS_SELECTED);
-			}
-		}
-		bSyncing = false;
-	}
-
-	// Sync focus too
-	if ((pNMLV->uNewState & LVIS_FOCUSED) != (pNMLV->uOldState & LVIS_FOCUSED))
-	{
-		if (!bSyncing && m_pCoordinator)
-		{
-			bSyncing = true;
-			CDirPaneView *pOtherPane = (m_nThisPane == 0) ?
-				m_pCoordinator->GetRightPaneView() : m_pCoordinator->GetLeftPaneView();
-			if (pOtherPane)
-			{
-				CListCtrl &otherList = pOtherPane->GetListCtrl();
-				if (otherList.GetSafeHwnd())
-				{
-					int nItem = pNMLV->iItem;
-					if (pNMLV->uNewState & LVIS_FOCUSED)
-						otherList.SetItemState(nItem, LVIS_FOCUSED, LVIS_FOCUSED);
-					else
-						otherList.SetItemState(nItem, 0, LVIS_FOCUSED);
-				}
-			}
-			bSyncing = false;
-		}
-	}
-
-	// Update gutter display on selection change
+	// Update status bar
 	CDirFrame *pFrame = GetParentFrame();
-	if (pFrame)
-	{
-		CDirGutterView *pGutter = pFrame->GetGutterView();
-		if (pGutter)
-			pGutter->UpdateDisplay();
-	}
-
-	// Update status bar: show detail for single selection, summary counts otherwise
 	if (m_pCoordinator && m_pList && pFrame)
 	{
 		int nSelCount = m_pList->GetSelectedCount();
@@ -1672,88 +2208,94 @@ void CDirPaneView::OnItemChanged(NMHDR* pNMHDR, LRESULT* pResult)
 		}
 		else
 		{
-			// Multiple or no selection: show summary counts
 			pFrame->SetStatus(m_pCoordinator->FormatStatusString().c_str());
 		}
 	}
 }
 
 /**
- * @brief Handle scroll events — sync other pane and gutter view scroll position.
+ * @brief Handle NM_CLICK to track which side (left/right) was clicked.
+ *
+ * Uses SubItemHitTest to determine which column was clicked, then sets
+ * m_nActiveSide accordingly. This drives the split-selection highlight
+ * in OnCustomDraw — only the active side's columns show the selection bar.
  */
-void CDirPaneView::OnScroll(NMHDR* pNMHDR, LRESULT* pResult)
+void CDirSxSUnifiedView::OnClick(NMHDR* pNMHDR, LRESULT* pResult)
 {
+	NMITEMACTIVATE *pNMIA = (NMITEMACTIVATE *)pNMHDR;
 	*pResult = 0;
-	if (!m_pCoordinator || !m_pList)
+
+	LVHITTESTINFO lvhti = {};
+	lvhti.pt = pNMIA->ptAction;
+	m_pList->SubItemHitTest(&lvhti);
+
+	int colSide = GetColumnSide(lvhti.iSubItem);
+	if (colSide == 0)
+		m_nActiveSide = 0;
+	else if (colSide == 1)
+		m_nActiveSide = 1;
+	// Center column: keep previous active side
+
+	// Also update context side to match (for operations triggered from toolbar etc.)
+	m_nContextSide = m_nActiveSide;
+
+	// Force redraw so split selection highlight updates
+	m_pList->Invalidate(FALSE);
+}
+
+/////////////////////////////////////////////////////////////////////////////
+// Tree mode expand/collapse
+
+/**
+ * @brief Compare any NOCMP children of a folder inline.
+ * When expanding a folder whose children were discovered but not compared
+ * (NOCMP status), this performs the comparison so the Cmp column updates.
+ */
+void CDirSxSUnifiedView::CompareExpandedChildren(DIFFITEM &parentDi)
+{
+	CDirDoc *pDoc = GetDocument();
+	if (!pDoc || !pDoc->HasDiffs())
+		return;
+	if (!parentDi.HasChildren())
 		return;
 
-	int nTopIndex = m_pList->GetTopIndex();
+	CDiffContext &ctxt = GetDiffContext();
+	FolderCmp fc(&ctxt);
 
-	// Sync the other pane
-	CDirPaneView *pOtherPane = (m_nThisPane == 0) ?
-		m_pCoordinator->GetRightPaneView() : m_pCoordinator->GetLeftPaneView();
-	if (pOtherPane)
+	DIFFITEM *childPos = ctxt.GetFirstChildDiffPosition(&parentDi);
+	while (childPos != nullptr)
 	{
-		CListCtrl &otherList = pOtherPane->GetListCtrl();
-		if (otherList.GetSafeHwnd() && otherList.GetTopIndex() != nTopIndex)
+		DIFFITEM &child = ctxt.GetNextSiblingDiffRefPosition(childPos);
+		if (child.diffcode.isDirectory())
+			continue;
+		// Only compare items that haven't been compared yet
+		unsigned cmpFlags = child.diffcode.diffcode & DIFFCODE::COMPAREFLAGS;
+		if (cmpFlags != DIFFCODE::NOCMP)
+			continue;
+		// Only compare items that exist on both sides
+		if (!child.diffcode.existAll())
+			continue;
+
+		child.diffcode.diffcode &= ~DIFFCODE::NEEDSCAN;
+		if (!child.diffcode.isResultFiltered())
 		{
-			otherList.EnsureVisible(nTopIndex + otherList.GetCountPerPage() - 1, FALSE);
-			otherList.EnsureVisible(nTopIndex, FALSE);
-		}
-	}
-
-	// Sync gutter
-	CDirFrame *pFrame = GetParentFrame();
-	if (pFrame)
-	{
-		CDirGutterView *pGutter = pFrame->GetGutterView();
-		if (pGutter)
-			pGutter->SetScrollPos(nTopIndex);
-	}
-}
-
-/**
- * @brief Handle mouse wheel — sync other pane and gutter after scrolling.
- */
-BOOL CDirPaneView::OnMouseWheel(UINT nFlags, short zDelta, CPoint pt)
-{
-	BOOL bResult = __super::OnMouseWheel(nFlags, zDelta, pt);
-
-	// After our scroll, sync other pane and gutter
-	if (m_pCoordinator && m_pList)
-	{
-		int nTopIndex = m_pList->GetTopIndex();
-
-		CDirPaneView *pOtherPane = (m_nThisPane == 0) ?
-			m_pCoordinator->GetRightPaneView() : m_pCoordinator->GetLeftPaneView();
-		if (pOtherPane)
-		{
-			CListCtrl &otherList = pOtherPane->GetListCtrl();
-			if (otherList.GetSafeHwnd() && otherList.GetTopIndex() != nTopIndex)
+			child.diffcode.diffcode |= fc.prepAndCompareFiles(child);
+			child.nsdiffs = fc.m_ndiffs;
+			child.nidiffs = fc.m_ntrivialdiffs;
+			int nDirs = ctxt.GetCompareDirs();
+			for (int i = 0; i < nDirs; ++i)
 			{
-				otherList.EnsureVisible(nTopIndex + otherList.GetCountPerPage() - 1, FALSE);
-				otherList.EnsureVisible(nTopIndex, FALSE);
+				if (child.diffcode.exists(i))
+				{
+					child.diffFileInfo[i].m_textStats = fc.m_diffFileData.m_textStats[i];
+					child.diffFileInfo[i].encoding = fc.m_diffFileData.m_FileLocation[i].encoding;
+				}
 			}
 		}
-
-		CDirFrame *pFrame = GetParentFrame();
-		if (pFrame)
-		{
-			CDirGutterView *pGutter = pFrame->GetGutterView();
-			if (pGutter)
-				pGutter->SetScrollPos(nTopIndex);
-		}
 	}
-
-	return bResult;
 }
 
-// --- Tree mode expand/collapse ---
-
-/**
- * @brief Expand a folder item in tree mode.
- */
-void CDirPaneView::ExpandSubdir(int sel)
+void CDirSxSUnifiedView::ExpandSubdir(int sel)
 {
 	if (!m_pCoordinator)
 		return;
@@ -1764,22 +2306,28 @@ void CDirPaneView::ExpandSubdir(int sel)
 	if (di.diffcode.isDirectory())
 	{
 		di.customFlags |= ViewCustomFlags::EXPANDED;
-		// If scan is still running and this folder hasn't been scanned yet,
-		// request priority scanning so its contents appear immediately
 		CDirDoc *pDoc = GetDocument();
-		if (pDoc && !di.HasChildren() &&
-			pDoc->m_diffThread.GetThreadState() == CDiffThread::THREAD_COMPARING)
+		if (pDoc && !di.HasChildren())
 		{
-			pDoc->m_diffThread.RequestPriorityScan(key);
+			auto state = pDoc->m_diffThread.GetThreadState();
+			if (state == CDiffThread::THREAD_COMPARING)
+			{
+				pDoc->m_diffThread.RequestPriorityScan(key);
+			}
+			else if (state == CDiffThread::THREAD_COMPLETED)
+			{
+				pDoc->Rescan();
+				return;
+			}
 		}
+		// Compare any NOCMP children so Cmp column updates
+		CompareExpandedChildren(di);
+		m_pCoordinator->InvalidateFolderStatusCacheFor(key);
 		m_pCoordinator->Redisplay();
 	}
 }
 
-/**
- * @brief Collapse a folder item in tree mode.
- */
-void CDirPaneView::CollapseSubdir(int sel)
+void CDirSxSUnifiedView::CollapseSubdir(int sel)
 {
 	if (!m_pCoordinator)
 		return;
@@ -1794,10 +2342,7 @@ void CDirPaneView::CollapseSubdir(int sel)
 	}
 }
 
-/**
- * @brief Toggle expand/collapse of a folder item.
- */
-void CDirPaneView::ToggleExpandSubdir(int sel)
+void CDirSxSUnifiedView::ToggleExpandSubdir(int sel)
 {
 	if (!m_pCoordinator)
 		return;
@@ -1807,29 +2352,33 @@ void CDirPaneView::ToggleExpandSubdir(int sel)
 	DIFFITEM &di = GetDiffContext().GetDiffRefAt(key);
 	if (!di.diffcode.isDirectory())
 		return;
-	// Toggle expand/collapse — even if HasChildren() is false (scan may
-	// still be running), we set the flag so children appear once available.
 	if (di.customFlags & ViewCustomFlags::EXPANDED)
 		di.customFlags &= ~ViewCustomFlags::EXPANDED;
 	else
 	{
 		di.customFlags |= ViewCustomFlags::EXPANDED;
-		// If scan is still running and this folder hasn't been scanned yet,
-		// request priority scanning so its contents appear immediately
 		CDirDoc *pDoc = GetDocument();
-		if (pDoc && !di.HasChildren() &&
-			pDoc->m_diffThread.GetThreadState() == CDiffThread::THREAD_COMPARING)
+		if (pDoc && !di.HasChildren())
 		{
-			pDoc->m_diffThread.RequestPriorityScan(key);
+			auto state = pDoc->m_diffThread.GetThreadState();
+			if (state == CDiffThread::THREAD_COMPARING)
+			{
+				pDoc->m_diffThread.RequestPriorityScan(key);
+			}
+			else if (state == CDiffThread::THREAD_COMPLETED)
+			{
+				pDoc->Rescan();
+				return;
+			}
 		}
+		// Compare any NOCMP children so Cmp column updates
+		CompareExpandedChildren(di);
+		m_pCoordinator->InvalidateFolderStatusCacheFor(key);
 	}
 	m_pCoordinator->Redisplay();
 }
 
-/**
- * @brief Expand all subdirectories in tree mode.
- */
-void CDirPaneView::OnExpandAllSubdirs()
+void CDirSxSUnifiedView::OnExpandAllSubdirs()
 {
 	if (!m_pCoordinator)
 		return;
@@ -1844,10 +2393,7 @@ void CDirPaneView::OnExpandAllSubdirs()
 	m_pCoordinator->Redisplay();
 }
 
-/**
- * @brief Collapse all subdirectories in tree mode.
- */
-void CDirPaneView::OnCollapseAllSubdirs()
+void CDirSxSUnifiedView::OnCollapseAllSubdirs()
 {
 	if (!m_pCoordinator)
 		return;
@@ -1862,8 +2408,10 @@ void CDirPaneView::OnCollapseAllSubdirs()
 	m_pCoordinator->Redisplay();
 }
 
-// Tree mode command handlers
-void CDirPaneView::OnSxsToggleTree()
+/////////////////////////////////////////////////////////////////////////////
+// Tree/flatten mode toggles
+
+void CDirSxSUnifiedView::OnSxsToggleTree()
 {
 	bool bCurrent = GetOptionsMgr()->GetBool(OPT_TREE_MODE);
 	GetOptionsMgr()->SaveOption(OPT_TREE_MODE, !bCurrent);
@@ -1871,17 +2419,17 @@ void CDirPaneView::OnSxsToggleTree()
 		m_pCoordinator->Redisplay();
 }
 
-void CDirPaneView::OnSxsExpandAll()
+void CDirSxSUnifiedView::OnSxsExpandAll()
 {
 	OnExpandAllSubdirs();
 }
 
-void CDirPaneView::OnSxsCollapseAll()
+void CDirSxSUnifiedView::OnSxsCollapseAll()
 {
 	OnCollapseAllSubdirs();
 }
 
-void CDirPaneView::OnSxsFlattenMode()
+void CDirSxSUnifiedView::OnSxsFlattenMode()
 {
 	bool bCurrent = GetOptionsMgr()->GetBool(OPT_DIRVIEW_SXS_FLATTEN_MODE);
 	GetOptionsMgr()->SaveOption(OPT_DIRVIEW_SXS_FLATTEN_MODE, !bCurrent);
@@ -1889,32 +2437,27 @@ void CDirPaneView::OnSxsFlattenMode()
 		m_pCoordinator->Redisplay();
 }
 
-void CDirPaneView::OnUpdateSxsToggleTree(CCmdUI* pCmdUI)
+void CDirSxSUnifiedView::OnUpdateSxsToggleTree(CCmdUI* pCmdUI)
 {
 	pCmdUI->SetCheck(GetOptionsMgr()->GetBool(OPT_TREE_MODE));
 }
 
-void CDirPaneView::OnUpdateSxsFlattenMode(CCmdUI* pCmdUI)
+void CDirSxSUnifiedView::OnUpdateSxsFlattenMode(CCmdUI* pCmdUI)
 {
 	pCmdUI->SetCheck(GetOptionsMgr()->GetBool(OPT_DIRVIEW_SXS_FLATTEN_MODE));
 }
 
-// --- Batch 5: Navigation & Operations ---
+/////////////////////////////////////////////////////////////////////////////
+// Refresh, rename, find
 
-/**
- * @brief Refresh (F5) — rescan the folder comparison.
- */
-void CDirPaneView::OnSxsRefresh()
+void CDirSxSUnifiedView::OnSxsRefresh()
 {
 	CDirDoc *pDoc = GetDocument();
 	if (pDoc)
 		pDoc->Rescan();
 }
 
-/**
- * @brief Rename in-place (F2) — begin label edit on the selected item.
- */
-void CDirPaneView::OnSxsRename()
+void CDirSxSUnifiedView::OnSxsRename()
 {
 	if (!m_pList)
 		return;
@@ -1927,16 +2470,13 @@ void CDirPaneView::OnSxsRename()
 	}
 }
 
-/**
- * @brief Handle end of label edit — perform the actual rename.
- */
-void CDirPaneView::OnEndLabelEdit(NMHDR* pNMHDR, LRESULT* pResult)
+void CDirSxSUnifiedView::OnEndLabelEdit(NMHDR* pNMHDR, LRESULT* pResult)
 {
 	NMLVDISPINFO *pDispInfo = (NMLVDISPINFO *)pNMHDR;
 	*pResult = FALSE;
 
 	if (pDispInfo->item.pszText == nullptr)
-		return; // Edit was cancelled
+		return;
 
 	int nItem = pDispInfo->item.iItem;
 	DIFFITEM *key = GetItemKey(nItem);
@@ -1954,8 +2494,8 @@ void CDirPaneView::OnEndLabelEdit(NMHDR* pNMHDR, LRESULT* pResult)
 	if (newName.empty())
 		return;
 
-	// Rename on the side this pane represents
-	int side = m_nThisPane;
+	// Rename on the context side
+	int side = m_nContextSide;
 	if (side >= ctxt.GetCompareDirs())
 		side = ctxt.GetCompareDirs() - 1;
 
@@ -1969,7 +2509,6 @@ void CDirPaneView::OnEndLabelEdit(NMHDR* pNMHDR, LRESULT* pResult)
 	if (MoveFile(oldPath.c_str(), newPath.c_str()))
 	{
 		*pResult = TRUE;
-		// Rescan to pick up the change
 		pDoc->Rescan();
 	}
 	else
@@ -1980,11 +2519,10 @@ void CDirPaneView::OnEndLabelEdit(NMHDR* pNMHDR, LRESULT* pResult)
 	}
 }
 
-/**
- * @brief Dialog proc for the simple Find Filename dialog.
- * The dialog is created from a memory template with: static label, edit, OK, Cancel.
- */
-static INT_PTR CALLBACK FindFilenameDlgProc(HWND hDlg, UINT msg, WPARAM wParam, LPARAM lParam)
+/////////////////////////////////////////////////////////////////////////////
+// Find filename dialog helpers (shared with DirPaneView)
+
+static INT_PTR CALLBACK UnifiedFindFilenameDlgProc(HWND hDlg, UINT msg, WPARAM wParam, LPARAM lParam)
 {
 	switch (msg)
 	{
@@ -2020,11 +2558,7 @@ static INT_PTR CALLBACK FindFilenameDlgProc(HWND hDlg, UINT msg, WPARAM wParam, 
 	return FALSE;
 }
 
-/**
- * @brief Build an in-memory dialog template for the Find Filename dialog.
- * Returns the dialog template pointer within the provided buffer.
- */
-static DLGTEMPLATE* BuildFindDlgTemplate(BYTE* buffer, size_t bufSize)
+static DLGTEMPLATE* BuildUnifiedFindDlgTemplate(BYTE* buffer, size_t bufSize)
 {
 	memset(buffer, 0, bufSize);
 	const int DLG_W = 260, DLG_H = 75;
@@ -2036,8 +2570,8 @@ static DLGTEMPLATE* BuildFindDlgTemplate(BYTE* buffer, size_t bufSize)
 	pDlg->cx = DLG_W; pDlg->cy = DLG_H;
 
 	WORD* pw = (WORD*)(pDlg + 1);
-	*pw++ = 0; // menu
-	*pw++ = 0; // class
+	*pw++ = 0;
+	*pw++ = 0;
 	const wchar_t dlgTitle[] = L"Find Filename";
 	memcpy(pw, dlgTitle, sizeof(dlgTitle));
 	pw += _countof(dlgTitle);
@@ -2095,10 +2629,7 @@ static DLGTEMPLATE* BuildFindDlgTemplate(BYTE* buffer, size_t bufSize)
 	return pDlg;
 }
 
-/**
- * @brief Find filename (Ctrl+F) — prompt for filename and scroll to match.
- */
-void CDirPaneView::OnSxsFindFilename()
+void CDirSxSUnifiedView::OnSxsFindFilename()
 {
 	if (!m_pCoordinator || !m_pList)
 		return;
@@ -2109,10 +2640,10 @@ void CDirPaneView::OnSxsFindFilename()
 		_tcsncpy_s(szInput, s_lastSearch.c_str(), _TRUNCATE);
 
 	BYTE dlgBuf[1024];
-	DLGTEMPLATE* pDlgTmpl = BuildFindDlgTemplate(dlgBuf, sizeof(dlgBuf));
+	DLGTEMPLATE* pDlgTmpl = BuildUnifiedFindDlgTemplate(dlgBuf, sizeof(dlgBuf));
 
 	INT_PTR nResult = DialogBoxIndirectParam(AfxGetInstanceHandle(), pDlgTmpl,
-		m_hWnd, FindFilenameDlgProc, reinterpret_cast<LPARAM>(szInput));
+		m_hWnd, UnifiedFindFilenameDlgProc, reinterpret_cast<LPARAM>(szInput));
 
 	if (nResult != IDOK)
 		return;
@@ -2123,7 +2654,6 @@ void CDirPaneView::OnSxsFindFilename()
 	s_lastSearch = searchText;
 	m_sFindPattern = searchText;
 
-	// Search through items for matching filename (case-insensitive substring)
 	CDiffContext &ctxt = GetDiffContext();
 	String searchLower = searchText;
 	CharLower(&searchLower[0]);
@@ -2132,7 +2662,6 @@ void CDirPaneView::OnSxsFindFilename()
 	if (nStart < 0) nStart = 0;
 	int nCount = static_cast<int>(m_listViewItems.size());
 
-	// Search from current position, wrapping around
 	for (int offset = 1; offset <= nCount; offset++)
 	{
 		int i = (nStart + offset) % nCount;
@@ -2141,56 +2670,52 @@ void CDirPaneView::OnSxsFindFilename()
 			continue;
 
 		const DIFFITEM &di = ctxt.GetDiffAt(key);
-		int side = m_nThisPane;
-		if (side >= ctxt.GetCompareDirs())
-			side = ctxt.GetCompareDirs() - 1;
-		if (!di.diffcode.exists(side))
-			continue;
 
-		String filename = String(di.diffFileInfo[side].filename);
-		CharLower(&filename[0]);
-
-		if (filename.find(searchLower) != String::npos)
+		// Search both sides for matching filename
+		for (int side = 0; side < ctxt.GetCompareDirs(); side++)
 		{
-			// Found — select and scroll to this item
-			m_pList->SetItemState(-1, 0, LVIS_SELECTED | LVIS_FOCUSED);
-			m_pList->SetItemState(i, LVIS_SELECTED | LVIS_FOCUSED, LVIS_SELECTED | LVIS_FOCUSED);
-			m_pList->EnsureVisible(i, FALSE);
-			return;
+			if (!di.diffcode.exists(side))
+				continue;
+
+			String filename = String(di.diffFileInfo[side].filename);
+			CharLower(&filename[0]);
+
+			if (filename.find(searchLower) != String::npos)
+			{
+				m_pList->SetItemState(-1, 0, LVIS_SELECTED | LVIS_FOCUSED);
+				m_pList->SetItemState(i, LVIS_SELECTED | LVIS_FOCUSED, LVIS_SELECTED | LVIS_FOCUSED);
+				m_pList->EnsureVisible(i, FALSE);
+				return;
+			}
 		}
 	}
 
 	AfxMessageBox(_("Filename not found.").c_str(), MB_ICONINFORMATION);
 }
 
-/**
- * @brief Save column widths and orders to the registry/INI for this pane.
- */
-void CDirPaneView::SaveColumnState()
+/////////////////////////////////////////////////////////////////////////////
+// Column state save
+
+void CDirSxSUnifiedView::SaveColumnState()
 {
-	if (!m_pList || !m_pColItems)
+	// For unified view, save column widths under a unified option
+	// (Not using per-pane options since there's only one view)
+	if (!m_pList)
 		return;
 
-	// Save column widths
-	const String& colWidthOpt = (m_nThisPane == 0) ? OPT_DIRVIEW_SXS_LEFT_COLUMN_WIDTHS :
-		OPT_DIRVIEW_SXS_RIGHT_COLUMN_WIDTHS;
-	String sWidths = m_pColItems->SaveColumnWidths(
-		std::bind(&CListCtrl::GetColumnWidth, m_pList, std::placeholders::_1));
-	GetOptionsMgr()->SaveOption(colWidthOpt, sWidths);
-
-	// Save column orders
-	const String& colOrderOpt = (m_nThisPane == 0) ? OPT_DIRVIEW_SXS_LEFT_COLUMN_ORDERS :
-		OPT_DIRVIEW_SXS_RIGHT_COLUMN_ORDERS;
-	String sOrders = m_pColItems->SaveColumnOrders();
-	GetOptionsMgr()->SaveOption(colOrderOpt, sOrders);
+	String sWidths;
+	for (int i = 0; i < COL_COUNT; i++)
+	{
+		if (i > 0) sWidths += _T(" ");
+		sWidths += strutils::format(_T("%d"), m_pList->GetColumnWidth(i));
+	}
+	GetOptionsMgr()->SaveOption(OPT_DIRVIEW_SXS_LEFT_COLUMN_WIDTHS, sWidths);
 }
 
-// --- Batch 6: Smart Selection Commands ---
+/////////////////////////////////////////////////////////////////////////////
+// Selection commands
 
-/**
- * @brief Select all non-placeholder items.
- */
-void CDirPaneView::OnSxsSelectAll()
+void CDirSxSUnifiedView::OnSxsSelectAll()
 {
 	if (!m_pList)
 		return;
@@ -2202,16 +2727,14 @@ void CDirPaneView::OnSxsSelectAll()
 	}
 }
 
-/**
- * @brief Select items where this pane's file is newer than the other pane's.
- */
-void CDirPaneView::OnSxsSelectNewer()
+void CDirSxSUnifiedView::OnSxsSelectNewer()
 {
 	if (!m_pList || !GetDocument() || !GetDocument()->HasDiffs())
 		return;
 
 	const CDiffContext &ctxt = GetDiffContext();
-	int otherPane = (m_nThisPane == 0) ? (ctxt.GetCompareDirs() - 1) : 0;
+	int leftSide = 0;
+	int rightSide = ctxt.GetCompareDirs() - 1;
 	int toleranceSecs = GetOptionsMgr()->GetInt(OPT_CMP_IGNORE_SMALL_FILETIME_SECS);
 
 	m_pList->SetItemState(-1, 0, LVIS_SELECTED);
@@ -2224,17 +2747,17 @@ void CDirPaneView::OnSxsSelectNewer()
 		if (!IsItemExistAll(ctxt, di) || !di.diffcode.isResultDiff())
 			continue;
 
-		Poco::Timestamp::TimeDiff diff = di.diffFileInfo[m_nThisPane].mtime - di.diffFileInfo[otherPane].mtime;
+		// Select items where the context side is newer
+		int thisSide = m_nContextSide;
+		int otherSide = (thisSide == 0) ? rightSide : leftSide;
+		Poco::Timestamp::TimeDiff diff = di.diffFileInfo[thisSide].mtime - di.diffFileInfo[otherSide].mtime;
 		Poco::Timestamp::TimeDiff toleranceUs = static_cast<Poco::Timestamp::TimeDiff>(toleranceSecs) * Poco::Timestamp::resolution();
 		if (diff > toleranceUs)
 			m_pList->SetItemState(i, LVIS_SELECTED, LVIS_SELECTED);
 	}
 }
 
-/**
- * @brief Select orphan items (unique to one side).
- */
-void CDirPaneView::OnSxsSelectOrphans()
+void CDirSxSUnifiedView::OnSxsSelectOrphans()
 {
 	if (!m_pList || !GetDocument() || !GetDocument()->HasDiffs())
 		return;
@@ -2252,10 +2775,7 @@ void CDirPaneView::OnSxsSelectOrphans()
 	}
 }
 
-/**
- * @brief Select items that are different.
- */
-void CDirPaneView::OnSxsSelectDifferent()
+void CDirSxSUnifiedView::OnSxsSelectDifferent()
 {
 	if (!m_pList || !GetDocument() || !GetDocument()->HasDiffs())
 		return;
@@ -2273,10 +2793,7 @@ void CDirPaneView::OnSxsSelectDifferent()
 	}
 }
 
-/**
- * @brief Invert the current selection.
- */
-void CDirPaneView::OnSxsInvertSelection()
+void CDirSxSUnifiedView::OnSxsInvertSelection()
 {
 	if (!m_pList)
 		return;
@@ -2290,9 +2807,10 @@ void CDirPaneView::OnSxsInvertSelection()
 	}
 }
 
-// --- Phase 2: Next/Previous difference navigation ---
+/////////////////////////////////////////////////////////////////////////////
+// Next/Previous difference navigation
 
-void CDirPaneView::OnSxsNextDiff()
+void CDirSxSUnifiedView::OnSxsNextDiff()
 {
 	if (!m_pCoordinator || !m_pList)
 		return;
@@ -2314,15 +2832,15 @@ void CDirPaneView::OnSxsNextDiff()
 		const DIFFITEM &di = ctxt.GetDiffAt(key);
 		if (di.diffcode.isResultDiff() || !IsItemExistAll(ctxt, di))
 		{
-			// Found a difference — select it in both panes
-			m_pCoordinator->SelectRowInBothPanes(i);
+			m_pList->SetItemState(-1, 0, LVIS_SELECTED | LVIS_FOCUSED);
+			m_pList->SetItemState(i, LVIS_SELECTED | LVIS_FOCUSED, LVIS_SELECTED | LVIS_FOCUSED);
 			m_pList->EnsureVisible(i, FALSE);
 			return;
 		}
 	}
 }
 
-void CDirPaneView::OnSxsPrevDiff()
+void CDirSxSUnifiedView::OnSxsPrevDiff()
 {
 	if (!m_pCoordinator || !m_pList)
 		return;
@@ -2345,14 +2863,18 @@ void CDirPaneView::OnSxsPrevDiff()
 		const DIFFITEM &di = ctxt.GetDiffAt(key);
 		if (di.diffcode.isResultDiff() || !IsItemExistAll(ctxt, di))
 		{
-			m_pCoordinator->SelectRowInBothPanes(i);
+			m_pList->SetItemState(-1, 0, LVIS_SELECTED | LVIS_FOCUSED);
+			m_pList->SetItemState(i, LVIS_SELECTED | LVIS_FOCUSED, LVIS_SELECTED | LVIS_FOCUSED);
 			m_pList->EnsureVisible(i, FALSE);
 			return;
 		}
 	}
 }
 
-void CDirPaneView::OnSxsDelete()
+/////////////////////////////////////////////////////////////////////////////
+// Delete
+
+void CDirSxSUnifiedView::OnSxsDelete()
 {
 	if (!m_pCoordinator)
 		return;
@@ -2362,17 +2884,18 @@ void CDirPaneView::OnSxsDelete()
 		return;
 
 	std::vector<DIFFITEM*> items;
-	m_pCoordinator->GetSelectedItems(m_nThisPane, items);
+	m_pCoordinator->GetSelectedItems(m_nContextSide, items);
 	if (items.empty())
 		return;
 
-	// Confirm deletion
-	String msg = strutils::format(_T("Delete %d selected item(s) from this side?"), static_cast<int>(items.size()));
+	String msg = strutils::format(_T("Delete %d selected item(s) from %s side?"),
+		static_cast<int>(items.size()),
+		m_nContextSide == 0 ? _T("left") : _T("right"));
 	if (AfxMessageBox(msg.c_str(), MB_YESNO | MB_ICONQUESTION) != IDYES)
 		return;
 
 	const CDiffContext &ctxt = GetDiffContext();
-	int side = m_nThisPane;
+	int side = m_nContextSide;
 
 	ShellFileOperations fileOps;
 	for (auto *key : items)
@@ -2393,9 +2916,10 @@ void CDirPaneView::OnSxsDelete()
 	}
 }
 
-// --- Phase 2: Sync operation handlers ---
+/////////////////////////////////////////////////////////////////////////////
+// Sync operations
 
-void CDirPaneView::OnSxsUpdateLeft()
+void CDirSxSUnifiedView::OnSxsUpdateLeft()
 {
 	if (m_pCoordinator)
 	{
@@ -2404,7 +2928,7 @@ void CDirPaneView::OnSxsUpdateLeft()
 	}
 }
 
-void CDirPaneView::OnSxsUpdateRight()
+void CDirSxSUnifiedView::OnSxsUpdateRight()
 {
 	if (m_pCoordinator)
 	{
@@ -2413,7 +2937,7 @@ void CDirPaneView::OnSxsUpdateRight()
 	}
 }
 
-void CDirPaneView::OnSxsUpdateBoth()
+void CDirSxSUnifiedView::OnSxsUpdateBoth()
 {
 	if (m_pCoordinator)
 	{
@@ -2422,7 +2946,7 @@ void CDirPaneView::OnSxsUpdateBoth()
 	}
 }
 
-void CDirPaneView::OnSxsMirrorLeft()
+void CDirSxSUnifiedView::OnSxsMirrorLeft()
 {
 	if (m_pCoordinator)
 	{
@@ -2431,7 +2955,7 @@ void CDirPaneView::OnSxsMirrorLeft()
 	}
 }
 
-void CDirPaneView::OnSxsMirrorRight()
+void CDirSxSUnifiedView::OnSxsMirrorRight()
 {
 	if (m_pCoordinator)
 	{
@@ -2440,21 +2964,17 @@ void CDirPaneView::OnSxsMirrorRight()
 	}
 }
 
-void CDirPaneView::OnSxsCompareContents()
+void CDirSxSUnifiedView::OnSxsCompareContents()
 {
 	CDirDoc *pDoc = GetDocument();
 	if (pDoc)
 		pDoc->Rescan();
 }
 
-// --- CRC Compare handler ---
+/////////////////////////////////////////////////////////////////////////////
+// CRC Compare
 
-/**
- * @brief Compute CRC32 for selected items and show results.
- * For items that exist on both sides, compares the CRC values.
- * For items on only one side, shows the CRC of that file.
- */
-void CDirPaneView::OnSxsCrcCompare()
+void CDirSxSUnifiedView::OnSxsCrcCompare()
 {
 	if (!m_pCoordinator)
 		return;
@@ -2464,7 +2984,7 @@ void CDirPaneView::OnSxsCrcCompare()
 		return;
 
 	std::vector<DIFFITEM*> items;
-	m_pCoordinator->GetSelectedItems(m_nThisPane, items);
+	m_pCoordinator->GetSelectedItems(m_nContextSide, items);
 	if (items.empty())
 		return;
 
@@ -2492,10 +3012,7 @@ void CDirPaneView::OnSxsCrcCompare()
 			DWORD crcRight = CDirSideBySideCoordinator::ComputeCRC32(rightPath);
 
 			bool bMatch = (crcLeft == crcRight);
-			if (bMatch)
-				nMatch++;
-			else
-				nDiffer++;
+			if (bMatch) nMatch++; else nDiffer++;
 
 			result += strutils::format(_T("%s: L=%08X  R=%08X  %s\r\n"),
 				filename.c_str(), crcLeft, crcRight,
@@ -2513,7 +3030,6 @@ void CDirPaneView::OnSxsCrcCompare()
 		}
 	}
 
-	// Summary line
 	String summary = strutils::format(_T("\r\n--- Summary: %d match, %d differ, %d single-side ---"),
 		nMatch, nDiffer, nSingleSide);
 	result += summary;
@@ -2525,13 +3041,10 @@ void CDirPaneView::OnSxsCrcCompare()
 	AfxMessageBox(result.c_str(), MB_ICONINFORMATION);
 }
 
-// --- Touch Timestamps handler ---
+/////////////////////////////////////////////////////////////////////////////
+// Touch Timestamps
 
-/**
- * @brief Copy the modification timestamp from files on this pane's side to the other side.
- * Only processes items that exist on both sides.
- */
-void CDirPaneView::OnSxsTouchTimestamps()
+void CDirSxSUnifiedView::OnSxsTouchTimestamps()
 {
 	if (!m_pCoordinator)
 		return;
@@ -2541,15 +3054,14 @@ void CDirPaneView::OnSxsTouchTimestamps()
 		return;
 
 	std::vector<DIFFITEM*> items;
-	m_pCoordinator->GetSelectedItems(m_nThisPane, items);
+	m_pCoordinator->GetSelectedItems(m_nContextSide, items);
 	if (items.empty())
 		return;
 
 	const CDiffContext &ctxt = GetDiffContext();
-	int srcSide = m_nThisPane;
-	int dstSide = (m_nThisPane == 0) ? (ctxt.GetCompareDirs() - 1) : 0;
+	int srcSide = m_nContextSide;
+	int dstSide = (m_nContextSide == 0) ? (ctxt.GetCompareDirs() - 1) : 0;
 
-	// Confirm
 	String msg = strutils::format(
 		_T("Copy modification timestamps from %s side to %s side for %d selected item(s)?"),
 		srcSide == 0 ? _T("Left") : _T("Right"),
@@ -2580,27 +3092,22 @@ void CDirPaneView::OnSxsTouchTimestamps()
 		m_pCoordinator->LogOperation(strutils::format(
 			_T("Touch Timestamps: %d succeeded, %d failed"), nSuccess, nFailed));
 
-	String resultMsg = strutils::format(
-		_T("Touch Timestamps complete.\nSucceeded: %d\nFailed: %d"), nSuccess, nFailed);
-	AfxMessageBox(resultMsg.c_str(), MB_ICONINFORMATION);
+	AfxMessageBox(strutils::format(
+		_T("Touch Timestamps complete.\nSucceeded: %d\nFailed: %d"), nSuccess, nFailed).c_str(),
+		MB_ICONINFORMATION);
 
-	// Rescan to reflect updated timestamps
 	pDoc->Rescan();
 }
 
-// --- Show Log handler ---
+/////////////////////////////////////////////////////////////////////////////
+// Show Log
 
-/**
- * @brief Dialog proc for the Log Panel dialog.
- * Shows accumulated log messages in a scrollable read-only edit control.
- */
-static INT_PTR CALLBACK LogDlgProc(HWND hDlg, UINT msg, WPARAM wParam, LPARAM lParam)
+static INT_PTR CALLBACK UnifiedLogDlgProc(HWND hDlg, UINT msg, WPARAM wParam, LPARAM lParam)
 {
 	switch (msg)
 	{
 	case WM_INITDIALOG:
 		{
-			// The log text is passed via lParam as a LPCTSTR
 			const tchar_t* pszLog = reinterpret_cast<const tchar_t*>(lParam);
 			HWND hEdit = GetDlgItem(hDlg, 1001);
 			if (hEdit && pszLog)
@@ -2613,12 +3120,11 @@ static INT_PTR CALLBACK LogDlgProc(HWND hDlg, UINT msg, WPARAM wParam, LPARAM lP
 			EndDialog(hDlg, LOWORD(wParam));
 			return TRUE;
 		}
-		if (LOWORD(wParam) == 1002) // Clear button
+		if (LOWORD(wParam) == 1002)
 		{
 			HWND hEdit = GetDlgItem(hDlg, 1001);
-			if (hEdit)
-				SetWindowText(hEdit, _T(""));
-			EndDialog(hDlg, 1002); // Special return code to signal "clear"
+			if (hEdit) SetWindowText(hEdit, _T(""));
+			EndDialog(hDlg, 1002);
 			return TRUE;
 		}
 		break;
@@ -2627,43 +3133,35 @@ static INT_PTR CALLBACK LogDlgProc(HWND hDlg, UINT msg, WPARAM wParam, LPARAM lP
 			int cx = LOWORD(lParam);
 			int cy = HIWORD(lParam);
 			HWND hEdit = GetDlgItem(hDlg, 1001);
-			if (hEdit)
-				MoveWindow(hEdit, 5, 5, cx - 10, cy - 40, TRUE);
+			if (hEdit) MoveWindow(hEdit, 5, 5, cx - 10, cy - 40, TRUE);
 			HWND hOk = GetDlgItem(hDlg, IDOK);
-			if (hOk)
-				MoveWindow(hOk, cx / 2 - 80, cy - 30, 70, 24, TRUE);
+			if (hOk) MoveWindow(hOk, cx / 2 - 80, cy - 30, 70, 24, TRUE);
 			HWND hClear = GetDlgItem(hDlg, 1002);
-			if (hClear)
-				MoveWindow(hClear, cx / 2 + 10, cy - 30, 70, 24, TRUE);
+			if (hClear) MoveWindow(hClear, cx / 2 + 10, cy - 30, 70, 24, TRUE);
 		}
 		return TRUE;
 	}
 	return FALSE;
 }
 
-/**
- * @brief Build an in-memory dialog template for the Log Panel dialog.
- */
-static DLGTEMPLATE* BuildLogDlgTemplate(BYTE* buffer, size_t bufSize)
+static DLGTEMPLATE* BuildUnifiedLogDlgTemplate(BYTE* buffer, size_t bufSize)
 {
 	memset(buffer, 0, bufSize);
 	const int DLG_W = 350, DLG_H = 250;
 
 	DLGTEMPLATE* pDlg = (DLGTEMPLATE*)buffer;
 	pDlg->style = DS_CENTER | WS_POPUP | WS_CAPTION | WS_SYSMENU | WS_THICKFRAME;
-	pDlg->cdit = 3; // Edit control + OK button + Clear button
+	pDlg->cdit = 3;
 	pDlg->x = 0; pDlg->y = 0;
 	pDlg->cx = DLG_W; pDlg->cy = DLG_H;
 
 	WORD* pw = (WORD*)(pDlg + 1);
-	*pw++ = 0; // menu
-	*pw++ = 0; // class
+	*pw++ = 0; *pw++ = 0;
 	const wchar_t dlgTitle[] = L"Operation Log";
 	memcpy(pw, dlgTitle, sizeof(dlgTitle));
 	pw += _countof(dlgTitle);
 	pw = (WORD*)(((ULONG_PTR)pw + 3) & ~3);
 
-	// Edit control (multiline, read-only, scrollable)
 	DLGITEMTEMPLATE* pItem = (DLGITEMTEMPLATE*)pw;
 	pItem->style = WS_CHILD | WS_VISIBLE | WS_BORDER | WS_VSCROLL | WS_HSCROLL |
 		ES_MULTILINE | ES_AUTOVSCROLL | ES_AUTOHSCROLL | ES_READONLY;
@@ -2671,33 +3169,30 @@ static DLGTEMPLATE* BuildLogDlgTemplate(BYTE* buffer, size_t bufSize)
 	pItem->cx = DLG_W - 10; pItem->cy = DLG_H - 30;
 	pItem->id = 1001;
 	pw = (WORD*)(pItem + 1);
-	*pw++ = 0xFFFF; *pw++ = 0x0081; // Edit class
-	*pw++ = 0; // no title
-	*pw++ = 0; // no extra data
+	*pw++ = 0xFFFF; *pw++ = 0x0081;
+	*pw++ = 0; *pw++ = 0;
 	pw = (WORD*)(((ULONG_PTR)pw + 3) & ~3);
 
-	// OK button
 	pItem = (DLGITEMTEMPLATE*)pw;
 	pItem->style = WS_CHILD | WS_VISIBLE | BS_DEFPUSHBUTTON | WS_TABSTOP;
 	pItem->x = DLG_W / 2 - 80; pItem->y = DLG_H - 20;
 	pItem->cx = 60; pItem->cy = 14;
 	pItem->id = IDOK;
 	pw = (WORD*)(pItem + 1);
-	*pw++ = 0xFFFF; *pw++ = 0x0080; // Button class
+	*pw++ = 0xFFFF; *pw++ = 0x0080;
 	const wchar_t ok[] = L"OK";
 	memcpy(pw, ok, sizeof(ok));
 	pw += _countof(ok);
 	*pw++ = 0;
 	pw = (WORD*)(((ULONG_PTR)pw + 3) & ~3);
 
-	// Clear button
 	pItem = (DLGITEMTEMPLATE*)pw;
 	pItem->style = WS_CHILD | WS_VISIBLE | BS_PUSHBUTTON | WS_TABSTOP;
 	pItem->x = DLG_W / 2 + 10; pItem->y = DLG_H - 20;
 	pItem->cx = 60; pItem->cy = 14;
 	pItem->id = 1002;
 	pw = (WORD*)(pItem + 1);
-	*pw++ = 0xFFFF; *pw++ = 0x0080; // Button class
+	*pw++ = 0xFFFF; *pw++ = 0x0080;
 	const wchar_t clear[] = L"Clear";
 	memcpy(pw, clear, sizeof(clear));
 	pw += _countof(clear);
@@ -2706,22 +3201,15 @@ static DLGTEMPLATE* BuildLogDlgTemplate(BYTE* buffer, size_t bufSize)
 	return pDlg;
 }
 
-/**
- * @brief Show the operation log in a modal dialog.
- */
-void CDirPaneView::OnSxsShowLog()
+void CDirSxSUnifiedView::OnSxsShowLog()
 {
 	if (!m_pCoordinator)
 		return;
 
 	const auto& messages = m_pCoordinator->GetLogMessages();
-
-	// Build the log text
 	String logText;
 	if (messages.empty())
-	{
 		logText = _T("No operations logged yet.");
-	}
 	else
 	{
 		for (const auto& msg : messages)
@@ -2732,27 +3220,24 @@ void CDirPaneView::OnSxsShowLog()
 	}
 
 	BYTE dlgBuf[1024];
-	DLGTEMPLATE* pDlgTmpl = BuildLogDlgTemplate(dlgBuf, sizeof(dlgBuf));
+	DLGTEMPLATE* pDlgTmpl = BuildUnifiedLogDlgTemplate(dlgBuf, sizeof(dlgBuf));
 	INT_PTR nResult = DialogBoxIndirectParam(AfxGetInstanceHandle(), pDlgTmpl,
-		m_hWnd, LogDlgProc, reinterpret_cast<LPARAM>(logText.c_str()));
+		m_hWnd, UnifiedLogDlgProc, reinterpret_cast<LPARAM>(logText.c_str()));
 
-	// If "Clear" was pressed, clear the log
 	if (nResult == 1002)
 		m_pCoordinator->ClearLog();
 }
 
-// --- Feature: Report Generation ---
+/////////////////////////////////////////////////////////////////////////////
+// Report generation
 
-/**
- * @brief Get file attributes string (RHSA) for a DIFFITEM on this pane.
- */
-String CDirPaneView::GetItemAttributeString(const DIFFITEM& di) const
+String CDirSxSUnifiedView::GetItemAttributeString(const DIFFITEM& di) const
 {
 	if (!GetDocument() || !GetDocument()->HasDiffs())
 		return _T("");
 
 	const CDiffContext &ctxt = GetDiffContext();
-	int side = m_nThisPane;
+	int side = m_nContextSide;
 	if (!di.diffcode.exists(side))
 		return _T("");
 
@@ -2760,10 +3245,7 @@ String CDirPaneView::GetItemAttributeString(const DIFFITEM& di) const
 	return CDirSideBySideCoordinator::GetFileAttributeString(filePath);
 }
 
-/**
- * @brief Generate an HTML report of the comparison results.
- */
-void CDirPaneView::GenerateHTMLReport(const String& filePath)
+void CDirSxSUnifiedView::GenerateHTMLReport(const String& filePath)
 {
 	if (!m_pCoordinator || !GetDocument() || !GetDocument()->HasDiffs())
 		return;
@@ -2773,7 +3255,6 @@ void CDirPaneView::GenerateHTMLReport(const String& filePath)
 	int leftSide = 0;
 	int rightSide = ctxt.GetCompareDirs() - 1;
 
-	// Load color settings for HTML output
 	DIRCOLORSETTINGS colors = {};
 	Options::DirColors::Load(GetOptionsMgr(), colors);
 
@@ -2802,12 +3283,10 @@ void CDirPaneView::GenerateHTMLReport(const String& filePath)
 	f << _T("tr:hover { opacity: 0.9; }\n");
 	f << _T(".identical { background: ") << colorToHex(colors.clrDirItemEqual) << _T("; color: ") << colorToHex(colors.clrDirItemEqualText) << _T("; }\n");
 	f << _T(".different { background: ") << colorToHex(colors.clrDirItemDiff) << _T("; color: ") << colorToHex(colors.clrDirItemDiffText) << _T("; }\n");
-	f << _T(".newer { background: ") << colorToHex(colors.clrDirItemNewer) << _T("; color: ") << colorToHex(colors.clrDirItemNewerText) << _T("; }\n");
-	f << _T(".older { background: ") << colorToHex(colors.clrDirItemOlder) << _T("; color: ") << colorToHex(colors.clrDirItemOlderText) << _T("; }\n");
 	f << _T(".orphan { background: ") << colorToHex(colors.clrDirItemOrphan) << _T("; color: ") << colorToHex(colors.clrDirItemOrphanText) << _T("; }\n");
 	f << _T(".filtered { background: ") << colorToHex(colors.clrDirItemFiltered) << _T("; color: ") << colorToHex(colors.clrDirItemFilteredText) << _T("; }\n");
 	f << _T("</style>\n</head>\n<body>\n");
-	f << _T("<h1>WinMerge Side-by-Side Folder Comparison Report</h1>\n");
+	f << _T("<h1>WinMerge Unified Folder Comparison Report</h1>\n");
 	f << _T("<p><strong>Left:</strong> ") << ctxt.GetPath(leftSide) << _T("</p>\n");
 	f << _T("<p><strong>Right:</strong> ") << ctxt.GetPath(rightSide) << _T("</p>\n");
 	f << _T("<p><strong>Generated:</strong> ");
@@ -2818,11 +3297,8 @@ void CDirPaneView::GenerateHTMLReport(const String& filePath)
 		st.wYear, st.wMonth, st.wDay, st.wHour, st.wMinute, st.wSecond);
 	f << _T("</p>\n");
 
-	f << _T("<table>\n<tr><th>Filename</th><th>Left Status</th><th>Right Status</th>");
-	f << _T("<th>Size Left</th><th>Size Right</th><th>Date Left</th><th>Date Right</th>");
-	f << _T("<th>Attr Left</th><th>Attr Right</th></tr>\n");
-
-	int toleranceSecs = GetOptionsMgr()->GetInt(OPT_CMP_IGNORE_SMALL_FILETIME_SECS);
+	f << _T("<table>\n<tr><th>Filename</th><th>Cmp</th>");
+	f << _T("<th>Size Left</th><th>Size Right</th><th>Date Left</th><th>Date Right</th></tr>\n");
 
 	for (const auto& row : rowMapping)
 	{
@@ -2834,57 +3310,27 @@ void CDirPaneView::GenerateHTMLReport(const String& filePath)
 			continue;
 
 		String cssClass;
-		String leftStatus, rightStatus;
+		String cmpSymbol;
 
 		if (di.diffcode.isResultFiltered())
 		{
 			cssClass = _T("filtered");
-			leftStatus = _T("Filtered");
-			rightStatus = _T("Filtered");
+			cmpSymbol = _T("~");
 		}
 		else if (!IsItemExistAll(ctxt, di))
 		{
 			cssClass = _T("orphan");
-			if (di.diffcode.exists(leftSide))
-			{
-				leftStatus = _T("Unique");
-				rightStatus = _T("-");
-			}
-			else
-			{
-				leftStatus = _T("-");
-				rightStatus = _T("Unique");
-			}
+			cmpSymbol = _T("");
 		}
 		else if (di.diffcode.isResultSame())
 		{
 			cssClass = _T("identical");
-			leftStatus = _T("Identical");
-			rightStatus = _T("Identical");
+			cmpSymbol = _T("=");
 		}
 		else if (di.diffcode.isResultDiff())
 		{
-			Poco::Timestamp::TimeDiff diff = di.diffFileInfo[leftSide].mtime - di.diffFileInfo[rightSide].mtime;
-			Poco::Timestamp::TimeDiff toleranceUs = static_cast<Poco::Timestamp::TimeDiff>(toleranceSecs) * Poco::Timestamp::resolution();
-
-			if (diff > toleranceUs)
-			{
-				cssClass = _T("newer");
-				leftStatus = _T("Newer");
-				rightStatus = _T("Older");
-			}
-			else if (diff < -toleranceUs)
-			{
-				cssClass = _T("older");
-				leftStatus = _T("Older");
-				rightStatus = _T("Newer");
-			}
-			else
-			{
-				cssClass = _T("different");
-				leftStatus = _T("Different");
-				rightStatus = _T("Different");
-			}
+			cssClass = _T("different");
+			cmpSymbol = _T("\u2260");
 		}
 
 		String filename;
@@ -2901,45 +3347,19 @@ void CDirPaneView::GenerateHTMLReport(const String& filePath)
 		}
 
 		String sizeLeft = di.diffcode.exists(leftSide) ?
-			strutils::format(_T("%lld"), di.diffFileInfo[leftSide].size) : _T("-");
+			FormatFileSize(di.diffFileInfo[leftSide].size) : _T("-");
 		String sizeRight = di.diffcode.exists(rightSide) ?
-			strutils::format(_T("%lld"), di.diffFileInfo[rightSide].size) : _T("-");
-
-		auto formatTime = [](const DiffFileInfo &fi) -> String
-		{
-			if (fi.mtime == 0)
-				return _T("-");
-			int64_t epochUs = fi.mtime.epochMicroseconds();
-			int64_t ft100ns = epochUs * 10 + 116444736000000000LL;
-			FILETIME ft;
-			ft.dwLowDateTime = static_cast<DWORD>(ft100ns);
-			ft.dwHighDateTime = static_cast<DWORD>(ft100ns >> 32);
-			SYSTEMTIME stUtc, stLocal;
-			FileTimeToSystemTime(&ft, &stUtc);
-			SystemTimeToTzSpecificLocalTime(nullptr, &stUtc, &stLocal);
-			return strutils::format(_T("%04d-%02d-%02d %02d:%02d:%02d"),
-				stLocal.wYear, stLocal.wMonth, stLocal.wDay,
-				stLocal.wHour, stLocal.wMinute, stLocal.wSecond);
-		};
-
-		String dateLeft = di.diffcode.exists(leftSide) ? formatTime(di.diffFileInfo[leftSide]) : _T("-");
-		String dateRight = di.diffcode.exists(rightSide) ? formatTime(di.diffFileInfo[rightSide]) : _T("-");
-
-		String attrLeft = di.diffcode.exists(leftSide) ?
-			CDirSideBySideCoordinator::GetFileAttributeString(di.getFilepath(leftSide, ctxt.GetPath(leftSide))) : _T("-");
-		String attrRight = di.diffcode.exists(rightSide) ?
-			CDirSideBySideCoordinator::GetFileAttributeString(di.getFilepath(rightSide, ctxt.GetPath(rightSide))) : _T("-");
+			FormatFileSize(di.diffFileInfo[rightSide].size) : _T("-");
+		String dateLeft = di.diffcode.exists(leftSide) ? FormatTimestamp(di.diffFileInfo[leftSide]) : _T("-");
+		String dateRight = di.diffcode.exists(rightSide) ? FormatTimestamp(di.diffFileInfo[rightSide]) : _T("-");
 
 		f << _T("<tr class=\"") << cssClass << _T("\">");
 		f << _T("<td>") << filename << _T("</td>");
-		f << _T("<td>") << leftStatus << _T("</td>");
-		f << _T("<td>") << rightStatus << _T("</td>");
+		f << _T("<td>") << cmpSymbol << _T("</td>");
 		f << _T("<td>") << sizeLeft << _T("</td>");
 		f << _T("<td>") << sizeRight << _T("</td>");
 		f << _T("<td>") << dateLeft << _T("</td>");
 		f << _T("<td>") << dateRight << _T("</td>");
-		f << _T("<td>") << attrLeft << _T("</td>");
-		f << _T("<td>") << attrRight << _T("</td>");
 		f << _T("</tr>\n");
 	}
 
@@ -2957,10 +3377,7 @@ void CDirPaneView::GenerateHTMLReport(const String& filePath)
 	f.close();
 }
 
-/**
- * @brief Generate a CSV report of the comparison results.
- */
-void CDirPaneView::GenerateCSVReport(const String& filePath)
+void CDirSxSUnifiedView::GenerateCSVReport(const String& filePath)
 {
 	if (!m_pCoordinator || !GetDocument() || !GetDocument()->HasDiffs())
 		return;
@@ -2969,7 +3386,6 @@ void CDirPaneView::GenerateCSVReport(const String& filePath)
 	const auto& rowMapping = m_pCoordinator->GetRowMapping();
 	int leftSide = 0;
 	int rightSide = ctxt.GetCompareDirs() - 1;
-	int toleranceSecs = GetOptionsMgr()->GetInt(OPT_CMP_IGNORE_SMALL_FILETIME_SECS);
 
 	std::basic_ofstream<tchar_t> f(filePath.c_str());
 	if (!f.is_open())
@@ -2978,7 +3394,7 @@ void CDirPaneView::GenerateCSVReport(const String& filePath)
 		return;
 	}
 
-	f << _T("Filename,Left Status,Right Status,Size Left,Size Right,Date Left,Date Right,Attr Left,Attr Right\n");
+	f << _T("Filename,Comparison,Size Left,Size Right,Date Left,Date Right\n");
 
 	for (const auto& row : rowMapping)
 	{
@@ -2989,52 +3405,15 @@ void CDirPaneView::GenerateCSVReport(const String& filePath)
 		if (di.isEmpty() || di.diffcode.isDirectory())
 			continue;
 
-		String leftStatus, rightStatus;
-
+		String cmpSymbol;
 		if (di.diffcode.isResultFiltered())
-		{
-			leftStatus = _T("Filtered");
-			rightStatus = _T("Filtered");
-		}
+			cmpSymbol = _T("Filtered");
 		else if (!IsItemExistAll(ctxt, di))
-		{
-			if (di.diffcode.exists(leftSide))
-			{
-				leftStatus = _T("Unique");
-				rightStatus = _T("");
-			}
-			else
-			{
-				leftStatus = _T("");
-				rightStatus = _T("Unique");
-			}
-		}
+			cmpSymbol = _T("Orphan");
 		else if (di.diffcode.isResultSame())
-		{
-			leftStatus = _T("Identical");
-			rightStatus = _T("Identical");
-		}
+			cmpSymbol = _T("Identical");
 		else if (di.diffcode.isResultDiff())
-		{
-			Poco::Timestamp::TimeDiff diff = di.diffFileInfo[leftSide].mtime - di.diffFileInfo[rightSide].mtime;
-			Poco::Timestamp::TimeDiff toleranceUs = static_cast<Poco::Timestamp::TimeDiff>(toleranceSecs) * Poco::Timestamp::resolution();
-
-			if (diff > toleranceUs)
-			{
-				leftStatus = _T("Newer");
-				rightStatus = _T("Older");
-			}
-			else if (diff < -toleranceUs)
-			{
-				leftStatus = _T("Older");
-				rightStatus = _T("Newer");
-			}
-			else
-			{
-				leftStatus = _T("Different");
-				rightStatus = _T("Different");
-			}
-		}
+			cmpSymbol = _T("Different");
 
 		String filename;
 		for (int s = 0; s < ctxt.GetCompareDirs(); s++)
@@ -3054,8 +3433,7 @@ void CDirPaneView::GenerateCSVReport(const String& filePath)
 			String escaped;
 			for (auto ch : filename)
 			{
-				if (ch == _T('"'))
-					escaped += _T('"');
+				if (ch == _T('"')) escaped += _T('"');
 				escaped += ch;
 			}
 			filename = _T("\"") + escaped + _T("\"");
@@ -3065,46 +3443,19 @@ void CDirPaneView::GenerateCSVReport(const String& filePath)
 			strutils::format(_T("%lld"), di.diffFileInfo[leftSide].size) : _T("");
 		String sizeRight = di.diffcode.exists(rightSide) ?
 			strutils::format(_T("%lld"), di.diffFileInfo[rightSide].size) : _T("");
-
-		auto formatTime = [](const DiffFileInfo &fi) -> String
-		{
-			if (fi.mtime == 0)
-				return _T("");
-			int64_t epochUs = fi.mtime.epochMicroseconds();
-			int64_t ft100ns = epochUs * 10 + 116444736000000000LL;
-			FILETIME ft;
-			ft.dwLowDateTime = static_cast<DWORD>(ft100ns);
-			ft.dwHighDateTime = static_cast<DWORD>(ft100ns >> 32);
-			SYSTEMTIME stUtc, stLocal;
-			FileTimeToSystemTime(&ft, &stUtc);
-			SystemTimeToTzSpecificLocalTime(nullptr, &stUtc, &stLocal);
-			return strutils::format(_T("%04d-%02d-%02d %02d:%02d:%02d"),
-				stLocal.wYear, stLocal.wMonth, stLocal.wDay,
-				stLocal.wHour, stLocal.wMinute, stLocal.wSecond);
-		};
-
-		String dateLeft = di.diffcode.exists(leftSide) ? formatTime(di.diffFileInfo[leftSide]) : _T("");
-		String dateRight = di.diffcode.exists(rightSide) ? formatTime(di.diffFileInfo[rightSide]) : _T("");
-
-		String attrLeft = di.diffcode.exists(leftSide) ?
-			CDirSideBySideCoordinator::GetFileAttributeString(di.getFilepath(leftSide, ctxt.GetPath(leftSide))) : _T("");
-		String attrRight = di.diffcode.exists(rightSide) ?
-			CDirSideBySideCoordinator::GetFileAttributeString(di.getFilepath(rightSide, ctxt.GetPath(rightSide))) : _T("");
+		String dateLeft = di.diffcode.exists(leftSide) ? FormatTimestamp(di.diffFileInfo[leftSide]) : _T("");
+		String dateRight = di.diffcode.exists(rightSide) ? FormatTimestamp(di.diffFileInfo[rightSide]) : _T("");
 
 		f << filename << _T(",");
-		f << leftStatus << _T(",") << rightStatus << _T(",");
+		f << cmpSymbol << _T(",");
 		f << sizeLeft << _T(",") << sizeRight << _T(",");
-		f << dateLeft << _T(",") << dateRight << _T(",");
-		f << attrLeft << _T(",") << attrRight << _T("\n");
+		f << dateLeft << _T(",") << dateRight << _T("\n");
 	}
 
 	f.close();
 }
 
-/**
- * @brief Generate Report handler -- shows file dialog and creates HTML or CSV report.
- */
-void CDirPaneView::OnSxsGenerateReport()
+void CDirSxSUnifiedView::OnSxsGenerateReport()
 {
 	if (!m_pCoordinator || !GetDocument() || !GetDocument()->HasDiffs())
 		return;
@@ -3129,17 +3480,13 @@ void CDirPaneView::OnSxsGenerateReport()
 		GenerateHTMLReport(outputPath);
 
 	m_pCoordinator->LogOperation(strutils::format(_T("Generated report: %s"), outputPath.c_str()));
-
 	ShellExecute(GetSafeHwnd(), _T("open"), outputPath.c_str(), nullptr, nullptr, SW_SHOWNORMAL);
 }
 
-// --- Feature: Drag-Drop (drag OUT from pane) ---
+/////////////////////////////////////////////////////////////////////////////
+// Drag-Drop
 
-/**
- * @brief Handle LVN_BEGINDRAG -- initiate OLE drag with HDROP data.
- * Allows dragging files from the pane to Explorer or the other pane.
- */
-void CDirPaneView::OnBeginDrag(NMHDR* pNMHDR, LRESULT* pResult)
+void CDirSxSUnifiedView::OnBeginDrag(NMHDR* pNMHDR, LRESULT* pResult)
 {
 	*pResult = 0;
 
@@ -3147,7 +3494,7 @@ void CDirPaneView::OnBeginDrag(NMHDR* pNMHDR, LRESULT* pResult)
 		return;
 
 	const CDiffContext &ctxt = GetDiffContext();
-	int side = m_nThisPane;
+	int side = m_nContextSide;
 
 	std::vector<String> filePaths;
 	int nItem = -1;
@@ -3209,14 +3556,14 @@ void CDirPaneView::OnBeginDrag(NMHDR* pNMHDR, LRESULT* pResult)
 	if (dwEffect == DROPEFFECT_MOVE)
 	{
 		CDirDoc *pDoc = GetDocument();
-		if (pDoc)
-			pDoc->Rescan();
+		if (pDoc) pDoc->Rescan();
 	}
 }
 
-// --- Navigation handlers ---
+/////////////////////////////////////////////////////////////////////////////
+// Navigation handlers
 
-void CDirPaneView::OnSxsNavBack()
+void CDirSxSUnifiedView::OnSxsNavBack()
 {
 	if (!m_pCoordinator)
 		return;
@@ -3229,7 +3576,7 @@ void CDirPaneView::OnSxsNavBack()
 	}
 }
 
-void CDirPaneView::OnSxsNavForward()
+void CDirSxSUnifiedView::OnSxsNavForward()
 {
 	if (!m_pCoordinator)
 		return;
@@ -3242,17 +3589,17 @@ void CDirPaneView::OnSxsNavForward()
 	}
 }
 
-void CDirPaneView::OnUpdateSxsNavBack(CCmdUI* pCmdUI)
+void CDirSxSUnifiedView::OnUpdateSxsNavBack(CCmdUI* pCmdUI)
 {
 	pCmdUI->Enable(m_pCoordinator && m_pCoordinator->CanNavigateBack());
 }
 
-void CDirPaneView::OnUpdateSxsNavForward(CCmdUI* pCmdUI)
+void CDirSxSUnifiedView::OnUpdateSxsNavForward(CCmdUI* pCmdUI)
 {
 	pCmdUI->Enable(m_pCoordinator && m_pCoordinator->CanNavigateForward());
 }
 
-void CDirPaneView::OnSxsUpLevel()
+void CDirSxSUnifiedView::OnSxsUpLevel()
 {
 	if (!m_pCoordinator)
 		return;
@@ -3267,7 +3614,7 @@ void CDirPaneView::OnSxsUpLevel()
 	}
 }
 
-void CDirPaneView::OnSxsSetBase()
+void CDirSxSUnifiedView::OnSxsSetBase()
 {
 	if (!m_pCoordinator || !m_pList)
 		return;
@@ -3281,14 +3628,14 @@ void CDirPaneView::OnSxsSetBase()
 	const DIFFITEM &di = ctxt.GetDiffAt(key);
 	if (!di.diffcode.isDirectory())
 		return;
-	int side = m_nThisPane;
+	int side = m_nContextSide;
 	if (!di.diffcode.exists(side))
 		return;
 	String subPath = di.getFilepath(side, ctxt.GetPath(side));
 	m_pCoordinator->SetBaseFolder(side, subPath);
 }
 
-void CDirPaneView::OnSxsSetBaseOther()
+void CDirSxSUnifiedView::OnSxsSetBaseOther()
 {
 	if (!m_pCoordinator || !m_pList)
 		return;
@@ -3302,16 +3649,17 @@ void CDirPaneView::OnSxsSetBaseOther()
 	const DIFFITEM &di = ctxt.GetDiffAt(key);
 	if (!di.diffcode.isDirectory())
 		return;
-	int otherSide = (m_nThisPane == 0) ? (ctxt.GetCompareDirs() - 1) : 0;
+	int otherSide = (m_nContextSide == 0) ? (ctxt.GetCompareDirs() - 1) : 0;
 	if (!di.diffcode.exists(otherSide))
 		return;
 	String subPath = di.getFilepath(otherSide, ctxt.GetPath(otherSide));
 	m_pCoordinator->SetBaseFolderOtherSide(otherSide, subPath);
 }
 
-// --- Find Next / Find Prev ---
+/////////////////////////////////////////////////////////////////////////////
+// Find Next / Find Prev
 
-bool CDirPaneView::FindFilename(const String& pattern, bool bForward, int startRow)
+bool CDirSxSUnifiedView::FindFilename(const String& pattern, bool bForward, int startRow)
 {
 	int nCount = m_pList->GetItemCount();
 	if (nCount == 0 || pattern.empty())
@@ -3320,23 +3668,29 @@ bool CDirPaneView::FindFilename(const String& pattern, bool bForward, int startR
 	{
 		int idx = bForward ? (startRow + i) % nCount : (startRow - i + nCount) % nCount;
 		DIFFITEM *di = GetItemKey(idx);
-		if (!di || !m_pCoordinator->ItemExistsOnPane(idx, m_nThisPane))
+		if (!di)
 			continue;
 		const CDiffContext &ctxt = GetDiffContext();
 		const DIFFITEM &item = ctxt.GetDiffAt(di);
-		const String& name = (m_nThisPane == 0) ? item.diffFileInfo[0].filename : item.diffFileInfo[1].filename;
-		if (PathMatchSpec(name.c_str(), pattern.c_str()))
+		// Search both sides
+		for (int s = 0; s < ctxt.GetCompareDirs(); s++)
 		{
-			m_pList->SetItemState(-1, 0, LVIS_SELECTED | LVIS_FOCUSED);
-			m_pList->SetItemState(idx, LVIS_SELECTED | LVIS_FOCUSED, LVIS_SELECTED | LVIS_FOCUSED);
-			m_pList->EnsureVisible(idx, FALSE);
-			return true;
+			if (!item.diffcode.exists(s))
+				continue;
+			const String& name = item.diffFileInfo[s].filename;
+			if (PathMatchSpec(name.c_str(), pattern.c_str()))
+			{
+				m_pList->SetItemState(-1, 0, LVIS_SELECTED | LVIS_FOCUSED);
+				m_pList->SetItemState(idx, LVIS_SELECTED | LVIS_FOCUSED, LVIS_SELECTED | LVIS_FOCUSED);
+				m_pList->EnsureVisible(idx, FALSE);
+				return true;
+			}
 		}
 	}
 	return false;
 }
 
-void CDirPaneView::OnSxsFindNext()
+void CDirSxSUnifiedView::OnSxsFindNext()
 {
 	if (!m_pCoordinator || !m_pList)
 		return;
@@ -3351,7 +3705,7 @@ void CDirPaneView::OnSxsFindNext()
 		AfxMessageBox(_("No more matches found.").c_str(), MB_ICONINFORMATION);
 }
 
-void CDirPaneView::OnSxsFindPrev()
+void CDirSxSUnifiedView::OnSxsFindPrev()
 {
 	if (!m_pCoordinator || !m_pList)
 		return;
@@ -3366,9 +3720,10 @@ void CDirPaneView::OnSxsFindPrev()
 		AfxMessageBox(_("No more matches found.").c_str(), MB_ICONINFORMATION);
 }
 
-// --- Copy to Folder / Move to Folder ---
+/////////////////////////////////////////////////////////////////////////////
+// Copy to Folder / Move to Folder
 
-void CDirPaneView::OnSxsCopyToFolder()
+void CDirSxSUnifiedView::OnSxsCopyToFolder()
 {
 	if (!m_pCoordinator || !m_pList)
 		return;
@@ -3384,24 +3739,22 @@ void CDirPaneView::OnSxsCopyToFolder()
 	String destFolder = String(dlg.GetPathName().GetString());
 	const CDiffContext &ctxt = GetDiffContext();
 
-	// Collect selected file paths
 	std::vector<String> srcPaths;
 	int sel = -1;
 	while ((sel = m_pList->GetNextItem(sel, LVNI_SELECTED)) != -1)
 	{
 		DIFFITEM *key = GetItemKey(sel);
-		if (!key || !m_pCoordinator->ItemExistsOnPane(sel, m_nThisPane))
+		if (!key)
 			continue;
 		const DIFFITEM &di = ctxt.GetDiffAt(key);
-		if (!di.diffcode.exists(m_nThisPane))
+		if (!di.diffcode.exists(m_nContextSide))
 			continue;
-		String srcPath = di.getFilepath(m_nThisPane, ctxt.GetPath(m_nThisPane));
+		String srcPath = di.getFilepath(m_nContextSide, ctxt.GetPath(m_nContextSide));
 		srcPaths.push_back(srcPath);
 	}
 	if (srcPaths.empty())
 		return;
 
-	// Build double-null-terminated source string
 	String srcStr;
 	for (const auto& p : srcPaths)
 	{
@@ -3423,7 +3776,7 @@ void CDirPaneView::OnSxsCopyToFolder()
 	m_pCoordinator->LogOperation(_T("Copied files to: ") + destFolder);
 }
 
-void CDirPaneView::OnSxsMoveToFolder()
+void CDirSxSUnifiedView::OnSxsMoveToFolder()
 {
 	if (!m_pCoordinator || !m_pList)
 		return;
@@ -3439,24 +3792,22 @@ void CDirPaneView::OnSxsMoveToFolder()
 	String destFolder = String(dlg.GetPathName().GetString());
 	const CDiffContext &ctxt = GetDiffContext();
 
-	// Collect selected file paths
 	std::vector<String> srcPaths;
 	int sel = -1;
 	while ((sel = m_pList->GetNextItem(sel, LVNI_SELECTED)) != -1)
 	{
 		DIFFITEM *key = GetItemKey(sel);
-		if (!key || !m_pCoordinator->ItemExistsOnPane(sel, m_nThisPane))
+		if (!key)
 			continue;
 		const DIFFITEM &di = ctxt.GetDiffAt(key);
-		if (!di.diffcode.exists(m_nThisPane))
+		if (!di.diffcode.exists(m_nContextSide))
 			continue;
-		String srcPath = di.getFilepath(m_nThisPane, ctxt.GetPath(m_nThisPane));
+		String srcPath = di.getFilepath(m_nContextSide, ctxt.GetPath(m_nContextSide));
 		srcPaths.push_back(srcPath);
 	}
 	if (srcPaths.empty())
 		return;
 
-	// Build double-null-terminated source string
 	String srcStr;
 	for (const auto& p : srcPaths)
 	{
@@ -3479,20 +3830,16 @@ void CDirPaneView::OnSxsMoveToFolder()
 	pDoc->Rescan();
 }
 
-// --- New Folder ---
+/////////////////////////////////////////////////////////////////////////////
+// New Folder
 
-/**
- * @brief Dialog proc for the New Folder name input dialog.
- */
-static INT_PTR CALLBACK NewFolderDlgProc(HWND hDlg, UINT msg, WPARAM wParam, LPARAM lParam)
+static INT_PTR CALLBACK UnifiedNewFolderDlgProc(HWND hDlg, UINT msg, WPARAM wParam, LPARAM lParam)
 {
 	switch (msg)
 	{
 	case WM_INITDIALOG:
-		{
-			SetWindowLongPtr(hDlg, DWLP_USER, lParam);
-			SetFocus(GetDlgItem(hDlg, 1001));
-		}
+		SetWindowLongPtr(hDlg, DWLP_USER, lParam);
+		SetFocus(GetDlgItem(hDlg, 1001));
 		return FALSE;
 	case WM_COMMAND:
 		switch (LOWORD(wParam))
@@ -3500,8 +3847,7 @@ static INT_PTR CALLBACK NewFolderDlgProc(HWND hDlg, UINT msg, WPARAM wParam, LPA
 		case IDOK:
 			{
 				tchar_t *pBuf = reinterpret_cast<tchar_t*>(GetWindowLongPtr(hDlg, DWLP_USER));
-				if (pBuf)
-					::GetDlgItemTextW(hDlg, 1001, pBuf, MAX_PATH);
+				if (pBuf) ::GetDlgItemTextW(hDlg, 1001, pBuf, MAX_PATH);
 			}
 			EndDialog(hDlg, IDOK);
 			return TRUE;
@@ -3514,7 +3860,7 @@ static INT_PTR CALLBACK NewFolderDlgProc(HWND hDlg, UINT msg, WPARAM wParam, LPA
 	return FALSE;
 }
 
-static DLGTEMPLATE* BuildNewFolderDlgTemplate(BYTE* buffer, size_t bufSize)
+static DLGTEMPLATE* BuildUnifiedNewFolderDlgTemplate(BYTE* buffer, size_t bufSize)
 {
 	memset(buffer, 0, bufSize);
 	const int DLG_W = 260, DLG_H = 75;
@@ -3526,14 +3872,12 @@ static DLGTEMPLATE* BuildNewFolderDlgTemplate(BYTE* buffer, size_t bufSize)
 	pDlg->cx = DLG_W; pDlg->cy = DLG_H;
 
 	WORD* pw = (WORD*)(pDlg + 1);
-	*pw++ = 0; // menu
-	*pw++ = 0; // class
+	*pw++ = 0; *pw++ = 0;
 	const wchar_t dlgTitle[] = L"New Folder";
 	memcpy(pw, dlgTitle, sizeof(dlgTitle));
 	pw += _countof(dlgTitle);
 	pw = (WORD*)(((ULONG_PTR)pw + 3) & ~3);
 
-	// Static label
 	DLGITEMTEMPLATE* pItem = (DLGITEMTEMPLATE*)pw;
 	pItem->style = WS_CHILD | WS_VISIBLE | SS_LEFT;
 	pItem->x = 7; pItem->y = 7; pItem->cx = DLG_W - 14; pItem->cy = 10;
@@ -3546,18 +3890,15 @@ static DLGTEMPLATE* BuildNewFolderDlgTemplate(BYTE* buffer, size_t bufSize)
 	*pw++ = 0;
 	pw = (WORD*)(((ULONG_PTR)pw + 3) & ~3);
 
-	// Edit control (id=1001)
 	pItem = (DLGITEMTEMPLATE*)pw;
 	pItem->style = WS_CHILD | WS_VISIBLE | WS_BORDER | WS_TABSTOP | ES_AUTOHSCROLL;
 	pItem->x = 7; pItem->y = 20; pItem->cx = DLG_W - 14; pItem->cy = 14;
 	pItem->id = 1001;
 	pw = (WORD*)(pItem + 1);
 	*pw++ = 0xFFFF; *pw++ = 0x0081;
-	*pw++ = 0;
-	*pw++ = 0;
+	*pw++ = 0; *pw++ = 0;
 	pw = (WORD*)(((ULONG_PTR)pw + 3) & ~3);
 
-	// OK button
 	pItem = (DLGITEMTEMPLATE*)pw;
 	pItem->style = WS_CHILD | WS_VISIBLE | BS_DEFPUSHBUTTON | WS_TABSTOP;
 	pItem->x = DLG_W - 120; pItem->y = DLG_H - 20; pItem->cx = 50; pItem->cy = 14;
@@ -3570,7 +3911,6 @@ static DLGTEMPLATE* BuildNewFolderDlgTemplate(BYTE* buffer, size_t bufSize)
 	*pw++ = 0;
 	pw = (WORD*)(((ULONG_PTR)pw + 3) & ~3);
 
-	// Cancel button
 	pItem = (DLGITEMTEMPLATE*)pw;
 	pItem->style = WS_CHILD | WS_VISIBLE | BS_PUSHBUTTON | WS_TABSTOP;
 	pItem->x = DLG_W - 60; pItem->y = DLG_H - 20; pItem->cx = 50; pItem->cy = 14;
@@ -3585,7 +3925,7 @@ static DLGTEMPLATE* BuildNewFolderDlgTemplate(BYTE* buffer, size_t bufSize)
 	return pDlg;
 }
 
-void CDirPaneView::OnSxsNewFolder()
+void CDirSxSUnifiedView::OnSxsNewFolder()
 {
 	if (!m_pCoordinator)
 		return;
@@ -3593,10 +3933,10 @@ void CDirPaneView::OnSxsNewFolder()
 	tchar_t szInput[MAX_PATH] = {};
 
 	BYTE dlgBuf[1024];
-	DLGTEMPLATE* pDlgTmpl = BuildNewFolderDlgTemplate(dlgBuf, sizeof(dlgBuf));
+	DLGTEMPLATE* pDlgTmpl = BuildUnifiedNewFolderDlgTemplate(dlgBuf, sizeof(dlgBuf));
 
 	INT_PTR nResult = DialogBoxIndirectParam(AfxGetInstanceHandle(), pDlgTmpl,
-		m_hWnd, NewFolderDlgProc, reinterpret_cast<LPARAM>(szInput));
+		m_hWnd, UnifiedNewFolderDlgProc, reinterpret_cast<LPARAM>(szInput));
 
 	if (nResult != IDOK)
 		return;
@@ -3606,7 +3946,7 @@ void CDirPaneView::OnSxsNewFolder()
 		return;
 
 	const CDiffContext &ctxt = GetDiffContext();
-	String basePath = (m_nThisPane == 0) ? ctxt.GetLeftPath() : ctxt.GetRightPath();
+	String basePath = (m_nContextSide == 0) ? ctxt.GetLeftPath() : ctxt.GetRightPath();
 	String newPath = paths::ConcatPath(basePath, folderName);
 
 	if (CreateDirectory(newPath.c_str(), nullptr))
@@ -3622,9 +3962,10 @@ void CDirPaneView::OnSxsNewFolder()
 	}
 }
 
-// --- Delete Permanently ---
+/////////////////////////////////////////////////////////////////////////////
+// Delete Permanently
 
-void CDirPaneView::OnSxsDeletePermanent()
+void CDirSxSUnifiedView::OnSxsDeletePermanent()
 {
 	if (!m_pCoordinator)
 		return;
@@ -3634,17 +3975,18 @@ void CDirPaneView::OnSxsDeletePermanent()
 		return;
 
 	std::vector<DIFFITEM*> items;
-	m_pCoordinator->GetSelectedItems(m_nThisPane, items);
+	m_pCoordinator->GetSelectedItems(m_nContextSide, items);
 	if (items.empty())
 		return;
 
-	String msg = strutils::format(_T("PERMANENTLY delete %d selected item(s) from this side?\nThis cannot be undone!"),
-		static_cast<int>(items.size()));
+	String msg = strutils::format(_T("PERMANENTLY delete %d selected item(s) from %s side?\nThis cannot be undone!"),
+		static_cast<int>(items.size()),
+		m_nContextSide == 0 ? _T("left") : _T("right"));
 	if (AfxMessageBox(msg.c_str(), MB_YESNO | MB_ICONWARNING) != IDYES)
 		return;
 
 	const CDiffContext &ctxt = GetDiffContext();
-	int side = m_nThisPane;
+	int side = m_nContextSide;
 
 	ShellFileOperations fileOps;
 	for (auto *key : items)
@@ -3656,7 +3998,7 @@ void CDirPaneView::OnSxsDeletePermanent()
 		fileOps.AddSource(path);
 	}
 
-	fileOps.SetOperation(FO_DELETE, 0, GetSafeHwnd()); // No FOF_ALLOWUNDO
+	fileOps.SetOperation(FO_DELETE, 0, GetSafeHwnd());
 	if (fileOps.Run() && !fileOps.IsCanceled())
 	{
 		m_pCoordinator->LogOperation(strutils::format(_T("Permanently deleted %d item(s)"),
@@ -3665,9 +4007,10 @@ void CDirPaneView::OnSxsDeletePermanent()
 	}
 }
 
-// --- Exchange ---
+/////////////////////////////////////////////////////////////////////////////
+// Exchange
 
-void CDirPaneView::OnSxsExchange()
+void CDirSxSUnifiedView::OnSxsExchange()
 {
 	if (!m_pCoordinator)
 		return;
@@ -3677,7 +4020,7 @@ void CDirPaneView::OnSxsExchange()
 		return;
 
 	std::vector<DIFFITEM*> items;
-	m_pCoordinator->GetSelectedItems(m_nThisPane, items);
+	m_pCoordinator->GetSelectedItems(m_nContextSide, items);
 	if (items.empty())
 		return;
 
@@ -3690,13 +4033,10 @@ void CDirPaneView::OnSxsExchange()
 	pDoc->Rescan();
 }
 
-// --- Change Attributes ---
+/////////////////////////////////////////////////////////////////////////////
+// Change Attributes
 
-/**
- * @brief Dialog proc for the Change Attributes dialog.
- * Checkboxes for R, H, S, A attributes.
- */
-static INT_PTR CALLBACK ChangeAttrDlgProc(HWND hDlg, UINT msg, WPARAM wParam, LPARAM lParam)
+static INT_PTR CALLBACK UnifiedChangeAttrDlgProc(HWND hDlg, UINT msg, WPARAM wParam, LPARAM lParam)
 {
 	switch (msg)
 	{
@@ -3739,20 +4079,19 @@ static INT_PTR CALLBACK ChangeAttrDlgProc(HWND hDlg, UINT msg, WPARAM wParam, LP
 	return FALSE;
 }
 
-static DLGTEMPLATE* BuildChangeAttrDlgTemplate(BYTE* buffer, size_t bufSize)
+static DLGTEMPLATE* BuildUnifiedChangeAttrDlgTemplate(BYTE* buffer, size_t bufSize)
 {
 	memset(buffer, 0, bufSize);
 	const int DLG_W = 200, DLG_H = 120;
 
 	DLGTEMPLATE* pDlg = (DLGTEMPLATE*)buffer;
 	pDlg->style = DS_MODALFRAME | DS_CENTER | WS_POPUP | WS_CAPTION | WS_SYSMENU;
-	pDlg->cdit = 6; // 4 checkboxes + OK + Cancel
+	pDlg->cdit = 6;
 	pDlg->x = 0; pDlg->y = 0;
 	pDlg->cx = DLG_W; pDlg->cy = DLG_H;
 
 	WORD* pw = (WORD*)(pDlg + 1);
-	*pw++ = 0; // menu
-	*pw++ = 0; // class
+	*pw++ = 0; *pw++ = 0;
 	const wchar_t dlgTitle[] = L"Change Attributes";
 	memcpy(pw, dlgTitle, sizeof(dlgTitle));
 	pw += _countof(dlgTitle);
@@ -3784,7 +4123,6 @@ static DLGTEMPLATE* BuildChangeAttrDlgTemplate(BYTE* buffer, size_t bufSize)
 		pw = (WORD*)(((ULONG_PTR)pw + 3) & ~3);
 	}
 
-	// OK button
 	DLGITEMTEMPLATE* pItem = (DLGITEMTEMPLATE*)pw;
 	pItem->style = WS_CHILD | WS_VISIBLE | BS_DEFPUSHBUTTON | WS_TABSTOP;
 	pItem->x = DLG_W / 2 - 60; pItem->y = DLG_H - 22; pItem->cx = 50; pItem->cy = 14;
@@ -3797,7 +4135,6 @@ static DLGTEMPLATE* BuildChangeAttrDlgTemplate(BYTE* buffer, size_t bufSize)
 	*pw++ = 0;
 	pw = (WORD*)(((ULONG_PTR)pw + 3) & ~3);
 
-	// Cancel button
 	pItem = (DLGITEMTEMPLATE*)pw;
 	pItem->style = WS_CHILD | WS_VISIBLE | BS_PUSHBUTTON | WS_TABSTOP;
 	pItem->x = DLG_W / 2 + 10; pItem->y = DLG_H - 22; pItem->cx = 50; pItem->cy = 14;
@@ -3812,7 +4149,7 @@ static DLGTEMPLATE* BuildChangeAttrDlgTemplate(BYTE* buffer, size_t bufSize)
 	return pDlg;
 }
 
-void CDirPaneView::OnSxsChangeAttributes()
+void CDirSxSUnifiedView::OnSxsChangeAttributes()
 {
 	if (!m_pCoordinator || !m_pList)
 		return;
@@ -3821,7 +4158,6 @@ void CDirPaneView::OnSxsChangeAttributes()
 	if (!pDoc || !pDoc->HasDiffs())
 		return;
 
-	// Get current attributes of first selected item
 	int nItem = m_pList->GetNextItem(-1, LVNI_SELECTED);
 	if (nItem < 0)
 		return;
@@ -3832,24 +4168,23 @@ void CDirPaneView::OnSxsChangeAttributes()
 
 	const CDiffContext &ctxt = GetDiffContext();
 	const DIFFITEM &di = ctxt.GetDiffAt(key);
-	if (!di.diffcode.exists(m_nThisPane))
+	if (!di.diffcode.exists(m_nContextSide))
 		return;
 
-	String filePath = di.getFilepath(m_nThisPane, ctxt.GetPath(m_nThisPane));
+	String filePath = di.getFilepath(m_nContextSide, ctxt.GetPath(m_nContextSide));
 	DWORD attrs = GetFileAttributes(filePath.c_str());
 	if (attrs == INVALID_FILE_ATTRIBUTES)
 		return;
 
 	BYTE dlgBuf[2048];
-	DLGTEMPLATE* pDlgTmpl = BuildChangeAttrDlgTemplate(dlgBuf, sizeof(dlgBuf));
+	DLGTEMPLATE* pDlgTmpl = BuildUnifiedChangeAttrDlgTemplate(dlgBuf, sizeof(dlgBuf));
 
 	INT_PTR nResult = DialogBoxIndirectParam(AfxGetInstanceHandle(), pDlgTmpl,
-		m_hWnd, ChangeAttrDlgProc, reinterpret_cast<LPARAM>(&attrs));
+		m_hWnd, UnifiedChangeAttrDlgProc, reinterpret_cast<LPARAM>(&attrs));
 
 	if (nResult != IDOK)
 		return;
 
-	// Apply attributes to all selected items
 	int nSuccess = 0, nFailed = 0;
 	int sel = -1;
 	while ((sel = m_pList->GetNextItem(sel, LVNI_SELECTED)) != -1)
@@ -3858,9 +4193,9 @@ void CDirPaneView::OnSxsChangeAttributes()
 		if (!selKey)
 			continue;
 		const DIFFITEM &selDi = ctxt.GetDiffAt(selKey);
-		if (!selDi.diffcode.exists(m_nThisPane))
+		if (!selDi.diffcode.exists(m_nContextSide))
 			continue;
-		String selPath = selDi.getFilepath(m_nThisPane, ctxt.GetPath(m_nThisPane));
+		String selPath = selDi.getFilepath(m_nContextSide, ctxt.GetPath(m_nContextSide));
 		if (SetFileAttributes(selPath.c_str(), attrs))
 			nSuccess++;
 		else
@@ -3877,9 +4212,10 @@ void CDirPaneView::OnSxsChangeAttributes()
 	pDoc->Rescan();
 }
 
-// --- Touch Now / Touch Specific / Touch From Other ---
+/////////////////////////////////////////////////////////////////////////////
+// Touch Now / Touch Specific / Touch From Other
 
-void CDirPaneView::OnSxsTouchNow()
+void CDirSxSUnifiedView::OnSxsTouchNow()
 {
 	if (!m_pCoordinator || !m_pList)
 		return;
@@ -3899,9 +4235,9 @@ void CDirPaneView::OnSxsTouchNow()
 		const DIFFITEM &di = ctxt.GetDiffAt(key);
 		if (di.diffcode.isDirectory())
 			continue;
-		if (!di.diffcode.exists(m_nThisPane))
+		if (!di.diffcode.exists(m_nContextSide))
 			continue;
-		String filePath = di.getFilepath(m_nThisPane, ctxt.GetPath(m_nThisPane));
+		String filePath = di.getFilepath(m_nContextSide, ctxt.GetPath(m_nContextSide));
 		if (CDirSideBySideCoordinator::TouchToNow(filePath))
 			nSuccess++;
 		else
@@ -3918,17 +4254,13 @@ void CDirPaneView::OnSxsTouchNow()
 	pDoc->Rescan();
 }
 
-/**
- * @brief Dialog proc for the Touch Specific Time dialog.
- */
-static INT_PTR CALLBACK TouchSpecificDlgProc(HWND hDlg, UINT msg, WPARAM wParam, LPARAM lParam)
+static INT_PTR CALLBACK UnifiedTouchSpecificDlgProc(HWND hDlg, UINT msg, WPARAM wParam, LPARAM lParam)
 {
 	switch (msg)
 	{
 	case WM_INITDIALOG:
 		{
 			SetWindowLongPtr(hDlg, DWLP_USER, lParam);
-			// Set current date/time as default
 			SYSTEMTIME st;
 			GetLocalTime(&st);
 			tchar_t buf[64];
@@ -3944,8 +4276,7 @@ static INT_PTR CALLBACK TouchSpecificDlgProc(HWND hDlg, UINT msg, WPARAM wParam,
 		case IDOK:
 			{
 				tchar_t *pBuf = reinterpret_cast<tchar_t*>(GetWindowLongPtr(hDlg, DWLP_USER));
-				if (pBuf)
-					::GetDlgItemTextW(hDlg, 1001, pBuf, 64);
+				if (pBuf) ::GetDlgItemTextW(hDlg, 1001, pBuf, 64);
 			}
 			EndDialog(hDlg, IDOK);
 			return TRUE;
@@ -3958,7 +4289,7 @@ static INT_PTR CALLBACK TouchSpecificDlgProc(HWND hDlg, UINT msg, WPARAM wParam,
 	return FALSE;
 }
 
-static DLGTEMPLATE* BuildTouchSpecificDlgTemplate(BYTE* buffer, size_t bufSize)
+static DLGTEMPLATE* BuildUnifiedTouchSpecificDlgTemplate(BYTE* buffer, size_t bufSize)
 {
 	memset(buffer, 0, bufSize);
 	const int DLG_W = 260, DLG_H = 75;
@@ -3970,14 +4301,12 @@ static DLGTEMPLATE* BuildTouchSpecificDlgTemplate(BYTE* buffer, size_t bufSize)
 	pDlg->cx = DLG_W; pDlg->cy = DLG_H;
 
 	WORD* pw = (WORD*)(pDlg + 1);
-	*pw++ = 0; // menu
-	*pw++ = 0; // class
+	*pw++ = 0; *pw++ = 0;
 	const wchar_t dlgTitle[] = L"Touch to Specific Time";
 	memcpy(pw, dlgTitle, sizeof(dlgTitle));
 	pw += _countof(dlgTitle);
 	pw = (WORD*)(((ULONG_PTR)pw + 3) & ~3);
 
-	// Static label
 	DLGITEMTEMPLATE* pItem = (DLGITEMTEMPLATE*)pw;
 	pItem->style = WS_CHILD | WS_VISIBLE | SS_LEFT;
 	pItem->x = 7; pItem->y = 7; pItem->cx = DLG_W - 14; pItem->cy = 10;
@@ -3990,18 +4319,15 @@ static DLGTEMPLATE* BuildTouchSpecificDlgTemplate(BYTE* buffer, size_t bufSize)
 	*pw++ = 0;
 	pw = (WORD*)(((ULONG_PTR)pw + 3) & ~3);
 
-	// Edit control (id=1001)
 	pItem = (DLGITEMTEMPLATE*)pw;
 	pItem->style = WS_CHILD | WS_VISIBLE | WS_BORDER | WS_TABSTOP | ES_AUTOHSCROLL;
 	pItem->x = 7; pItem->y = 20; pItem->cx = DLG_W - 14; pItem->cy = 14;
 	pItem->id = 1001;
 	pw = (WORD*)(pItem + 1);
 	*pw++ = 0xFFFF; *pw++ = 0x0081;
-	*pw++ = 0;
-	*pw++ = 0;
+	*pw++ = 0; *pw++ = 0;
 	pw = (WORD*)(((ULONG_PTR)pw + 3) & ~3);
 
-	// OK button
 	pItem = (DLGITEMTEMPLATE*)pw;
 	pItem->style = WS_CHILD | WS_VISIBLE | BS_DEFPUSHBUTTON | WS_TABSTOP;
 	pItem->x = DLG_W - 120; pItem->y = DLG_H - 20; pItem->cx = 50; pItem->cy = 14;
@@ -4014,7 +4340,6 @@ static DLGTEMPLATE* BuildTouchSpecificDlgTemplate(BYTE* buffer, size_t bufSize)
 	*pw++ = 0;
 	pw = (WORD*)(((ULONG_PTR)pw + 3) & ~3);
 
-	// Cancel button
 	pItem = (DLGITEMTEMPLATE*)pw;
 	pItem->style = WS_CHILD | WS_VISIBLE | BS_PUSHBUTTON | WS_TABSTOP;
 	pItem->x = DLG_W - 60; pItem->y = DLG_H - 20; pItem->cx = 50; pItem->cy = 14;
@@ -4029,7 +4354,7 @@ static DLGTEMPLATE* BuildTouchSpecificDlgTemplate(BYTE* buffer, size_t bufSize)
 	return pDlg;
 }
 
-void CDirPaneView::OnSxsTouchSpecific()
+void CDirSxSUnifiedView::OnSxsTouchSpecific()
 {
 	if (!m_pCoordinator || !m_pList)
 		return;
@@ -4041,15 +4366,14 @@ void CDirPaneView::OnSxsTouchSpecific()
 	tchar_t szInput[64] = {};
 
 	BYTE dlgBuf[1024];
-	DLGTEMPLATE* pDlgTmpl = BuildTouchSpecificDlgTemplate(dlgBuf, sizeof(dlgBuf));
+	DLGTEMPLATE* pDlgTmpl = BuildUnifiedTouchSpecificDlgTemplate(dlgBuf, sizeof(dlgBuf));
 
 	INT_PTR nResult = DialogBoxIndirectParam(AfxGetInstanceHandle(), pDlgTmpl,
-		m_hWnd, TouchSpecificDlgProc, reinterpret_cast<LPARAM>(szInput));
+		m_hWnd, UnifiedTouchSpecificDlgProc, reinterpret_cast<LPARAM>(szInput));
 
 	if (nResult != IDOK)
 		return;
 
-	// Parse YYYY-MM-DD HH:MM:SS
 	SYSTEMTIME st = {};
 	if (_stscanf_s(szInput, _T("%hd-%hd-%hd %hd:%hd:%hd"),
 		&st.wYear, &st.wMonth, &st.wDay,
@@ -4059,7 +4383,6 @@ void CDirPaneView::OnSxsTouchSpecific()
 		return;
 	}
 
-	// Convert local SYSTEMTIME to FILETIME
 	SYSTEMTIME stUtc;
 	TzSpecificLocalTimeToSystemTime(nullptr, &st, &stUtc);
 	FILETIME ft;
@@ -4071,14 +4394,11 @@ void CDirPaneView::OnSxsTouchSpecific()
 	while ((sel = m_pList->GetNextItem(sel, LVNI_SELECTED)) != -1)
 	{
 		DIFFITEM *key = GetItemKey(sel);
-		if (!key)
-			continue;
+		if (!key) continue;
 		const DIFFITEM &di = ctxt.GetDiffAt(key);
-		if (di.diffcode.isDirectory())
-			continue;
-		if (!di.diffcode.exists(m_nThisPane))
-			continue;
-		String filePath = di.getFilepath(m_nThisPane, ctxt.GetPath(m_nThisPane));
+		if (di.diffcode.isDirectory()) continue;
+		if (!di.diffcode.exists(m_nContextSide)) continue;
+		String filePath = di.getFilepath(m_nContextSide, ctxt.GetPath(m_nContextSide));
 		if (CDirSideBySideCoordinator::TouchToSpecificTime(filePath, ft))
 			nSuccess++;
 		else
@@ -4095,11 +4415,8 @@ void CDirPaneView::OnSxsTouchSpecific()
 	pDoc->Rescan();
 }
 
-void CDirPaneView::OnSxsTouchFromOther()
+void CDirSxSUnifiedView::OnSxsTouchFromOther()
 {
-	// Same as existing OnSxsTouchTimestamps but in reverse direction
-	// Delegate to existing handler (which copies timestamps from this side to other side)
-	// For "from other", we need to reverse the direction
 	if (!m_pCoordinator)
 		return;
 
@@ -4108,13 +4425,13 @@ void CDirPaneView::OnSxsTouchFromOther()
 		return;
 
 	std::vector<DIFFITEM*> items;
-	m_pCoordinator->GetSelectedItems(m_nThisPane, items);
+	m_pCoordinator->GetSelectedItems(m_nContextSide, items);
 	if (items.empty())
 		return;
 
 	const CDiffContext &ctxt = GetDiffContext();
-	int dstSide = m_nThisPane;
-	int srcSide = (m_nThisPane == 0) ? (ctxt.GetCompareDirs() - 1) : 0;
+	int dstSide = m_nContextSide;
+	int srcSide = (m_nContextSide == 0) ? (ctxt.GetCompareDirs() - 1) : 0;
 
 	String msg = strutils::format(
 		_T("Copy modification timestamps from %s side to %s side for %d selected item(s)?"),
@@ -4128,10 +4445,8 @@ void CDirPaneView::OnSxsTouchFromOther()
 	for (auto *key : items)
 	{
 		const DIFFITEM &di = ctxt.GetDiffAt(key);
-		if (di.diffcode.isDirectory())
-			continue;
-		if (!di.diffcode.exists(srcSide) || !di.diffcode.exists(dstSide))
-			continue;
+		if (di.diffcode.isDirectory()) continue;
+		if (!di.diffcode.exists(srcSide) || !di.diffcode.exists(dstSide)) continue;
 
 		String srcPath = di.getFilepath(srcSide, ctxt.GetPath(srcSide));
 		String dstPath = di.getFilepath(dstSide, ctxt.GetPath(dstSide));
@@ -4152,12 +4467,10 @@ void CDirPaneView::OnSxsTouchFromOther()
 	pDoc->Rescan();
 }
 
-// --- Advanced Filter ---
+/////////////////////////////////////////////////////////////////////////////
+// Advanced Filter
 
-/**
- * @brief Dialog proc for the Advanced Filter dialog.
- */
-static INT_PTR CALLBACK AdvFilterDlgProc(HWND hDlg, UINT msg, WPARAM wParam, LPARAM lParam)
+static INT_PTR CALLBACK UnifiedAdvFilterDlgProc(HWND hDlg, UINT msg, WPARAM wParam, LPARAM lParam)
 {
 	switch (msg)
 	{
@@ -4210,20 +4523,19 @@ static INT_PTR CALLBACK AdvFilterDlgProc(HWND hDlg, UINT msg, WPARAM wParam, LPA
 	return FALSE;
 }
 
-static DLGTEMPLATE* BuildAdvFilterDlgTemplate(BYTE* buffer, size_t bufSize)
+static DLGTEMPLATE* BuildUnifiedAdvFilterDlgTemplate(BYTE* buffer, size_t bufSize)
 {
 	memset(buffer, 0, bufSize);
 	const int DLG_W = 300, DLG_H = 160;
 
 	DLGTEMPLATE* pDlg = (DLGTEMPLATE*)buffer;
 	pDlg->style = DS_MODALFRAME | DS_CENTER | WS_POPUP | WS_CAPTION | WS_SYSMENU;
-	pDlg->cdit = 12; // 5 labels + 5 edits + OK + Cancel
+	pDlg->cdit = 12;
 	pDlg->x = 0; pDlg->y = 0;
 	pDlg->cx = DLG_W; pDlg->cy = DLG_H;
 
 	WORD* pw = (WORD*)(pDlg + 1);
-	*pw++ = 0;
-	*pw++ = 0;
+	*pw++ = 0; *pw++ = 0;
 	const wchar_t dlgTitle[] = L"Advanced Filter";
 	memcpy(pw, dlgTitle, sizeof(dlgTitle));
 	pw += _countof(dlgTitle);
@@ -4245,7 +4557,6 @@ static DLGTEMPLATE* BuildAdvFilterDlgTemplate(BYTE* buffer, size_t bufSize)
 
 	for (auto &f : fields)
 	{
-		// Label
 		DLGITEMTEMPLATE* pItem = (DLGITEMTEMPLATE*)pw;
 		pItem->style = WS_CHILD | WS_VISIBLE | SS_LEFT;
 		pItem->x = 7; pItem->y = (short)f.y; pItem->cx = 100; pItem->cy = 10;
@@ -4257,19 +4568,16 @@ static DLGTEMPLATE* BuildAdvFilterDlgTemplate(BYTE* buffer, size_t bufSize)
 		*pw++ = 0;
 		pw = (WORD*)(((ULONG_PTR)pw + 3) & ~3);
 
-		// Edit
 		pItem = (DLGITEMTEMPLATE*)pw;
 		pItem->style = WS_CHILD | WS_VISIBLE | WS_BORDER | WS_TABSTOP | ES_AUTOHSCROLL;
 		pItem->x = 120; pItem->y = (short)f.y; pItem->cx = DLG_W - 130; pItem->cy = 14;
 		pItem->id = f.editId;
 		pw = (WORD*)(pItem + 1);
 		*pw++ = 0xFFFF; *pw++ = 0x0081;
-		*pw++ = 0;
-		*pw++ = 0;
+		*pw++ = 0; *pw++ = 0;
 		pw = (WORD*)(((ULONG_PTR)pw + 3) & ~3);
 	}
 
-	// OK button
 	DLGITEMTEMPLATE* pItem = (DLGITEMTEMPLATE*)pw;
 	pItem->style = WS_CHILD | WS_VISIBLE | BS_DEFPUSHBUTTON | WS_TABSTOP;
 	pItem->x = DLG_W / 2 - 60; pItem->y = DLG_H - 22; pItem->cx = 50; pItem->cy = 14;
@@ -4282,7 +4590,6 @@ static DLGTEMPLATE* BuildAdvFilterDlgTemplate(BYTE* buffer, size_t bufSize)
 	*pw++ = 0;
 	pw = (WORD*)(((ULONG_PTR)pw + 3) & ~3);
 
-	// Cancel button
 	pItem = (DLGITEMTEMPLATE*)pw;
 	pItem->style = WS_CHILD | WS_VISIBLE | BS_PUSHBUTTON | WS_TABSTOP;
 	pItem->x = DLG_W / 2 + 10; pItem->y = DLG_H - 22; pItem->cx = 50; pItem->cy = 14;
@@ -4297,7 +4604,7 @@ static DLGTEMPLATE* BuildAdvFilterDlgTemplate(BYTE* buffer, size_t bufSize)
 	return pDlg;
 }
 
-void CDirPaneView::OnSxsAdvancedFilter()
+void CDirSxSUnifiedView::OnSxsAdvancedFilter()
 {
 	if (!m_pCoordinator)
 		return;
@@ -4305,10 +4612,10 @@ void CDirPaneView::OnSxsAdvancedFilter()
 	CDirSideBySideCoordinator::AdvancedFilter filter = m_pCoordinator->GetAdvancedFilter();
 
 	BYTE dlgBuf[4096];
-	DLGTEMPLATE* pDlgTmpl = BuildAdvFilterDlgTemplate(dlgBuf, sizeof(dlgBuf));
+	DLGTEMPLATE* pDlgTmpl = BuildUnifiedAdvFilterDlgTemplate(dlgBuf, sizeof(dlgBuf));
 
 	INT_PTR nResult = DialogBoxIndirectParam(AfxGetInstanceHandle(), pDlgTmpl,
-		m_hWnd, AdvFilterDlgProc, reinterpret_cast<LPARAM>(&filter));
+		m_hWnd, UnifiedAdvFilterDlgProc, reinterpret_cast<LPARAM>(&filter));
 
 	if (nResult != IDOK)
 		return;
@@ -4318,9 +4625,10 @@ void CDirPaneView::OnSxsAdvancedFilter()
 	m_pCoordinator->Redisplay();
 }
 
-// --- Ignore Structure / Row Stripes ---
+/////////////////////////////////////////////////////////////////////////////
+// Ignore Structure / Row Stripes
 
-void CDirPaneView::OnSxsIgnoreStructure()
+void CDirSxSUnifiedView::OnSxsIgnoreStructure()
 {
 	bool bCurrent = GetOptionsMgr()->GetBool(OPT_DIRVIEW_SXS_IGNORE_FOLDER_STRUCTURE);
 	GetOptionsMgr()->SaveOption(OPT_DIRVIEW_SXS_IGNORE_FOLDER_STRUCTURE, !bCurrent);
@@ -4331,39 +4639,28 @@ void CDirPaneView::OnSxsIgnoreStructure()
 	}
 }
 
-void CDirPaneView::OnUpdateSxsIgnoreStructure(CCmdUI* pCmdUI)
+void CDirSxSUnifiedView::OnUpdateSxsIgnoreStructure(CCmdUI* pCmdUI)
 {
 	pCmdUI->SetCheck(GetOptionsMgr()->GetBool(OPT_DIRVIEW_SXS_IGNORE_FOLDER_STRUCTURE));
 }
 
-void CDirPaneView::OnSxsRowStripes()
+void CDirSxSUnifiedView::OnSxsRowStripes()
 {
 	m_bRowStripes = !m_bRowStripes;
 	GetOptionsMgr()->SaveOption(OPT_DIRVIEW_SXS_ROW_STRIPES, m_bRowStripes);
 	if (m_pList)
 		m_pList->InvalidateRect(nullptr);
-
-	// Sync the other pane too
-	if (m_pCoordinator)
-	{
-		CDirPaneView *pOtherPane = (m_nThisPane == 0) ?
-			m_pCoordinator->GetRightPaneView() : m_pCoordinator->GetLeftPaneView();
-		if (pOtherPane)
-		{
-			pOtherPane->m_bRowStripes = m_bRowStripes;
-			pOtherPane->GetListCtrl().InvalidateRect(nullptr);
-		}
-	}
 }
 
-void CDirPaneView::OnUpdateSxsRowStripes(CCmdUI* pCmdUI)
+void CDirSxSUnifiedView::OnUpdateSxsRowStripes(CCmdUI* pCmdUI)
 {
 	pCmdUI->SetCheck(m_bRowStripes);
 }
 
-// --- Exclude Pattern ---
+/////////////////////////////////////////////////////////////////////////////
+// Exclude Pattern
 
-void CDirPaneView::OnSxsExcludePattern()
+void CDirSxSUnifiedView::OnSxsExcludePattern()
 {
 	if (!m_pCoordinator || !m_pList)
 		return;
@@ -4378,14 +4675,15 @@ void CDirPaneView::OnSxsExcludePattern()
 
 	const CDiffContext &ctxt = GetDiffContext();
 	const DIFFITEM &di = ctxt.GetDiffAt(key);
-	int side = m_nThisPane;
+
+	// Find a side that exists
+	int side = m_nContextSide;
 	if (!di.diffcode.exists(side))
 		side = (side == 0) ? (ctxt.GetCompareDirs() - 1) : 0;
 	if (!di.diffcode.exists(side))
 		return;
 
 	String filename = di.diffFileInfo[side].filename;
-	// Extract extension
 	String::size_type dotPos = filename.rfind(_T('.'));
 	String pattern;
 	if (dotPos != String::npos)
@@ -4393,7 +4691,6 @@ void CDirPaneView::OnSxsExcludePattern()
 	else
 		pattern = _T("-") + filename;
 
-	// Append to the name filter
 	String currentFilter = m_pCoordinator->GetNameFilter();
 	if (!currentFilter.empty())
 		currentFilter += _T(" ");
@@ -4404,20 +4701,21 @@ void CDirPaneView::OnSxsExcludePattern()
 	m_pCoordinator->LogOperation(_T("Added exclude pattern: ") + pattern);
 }
 
-// --- Compare Info ---
+/////////////////////////////////////////////////////////////////////////////
+// Compare Info
 
-void CDirPaneView::OnSxsCompareInfo()
+void CDirSxSUnifiedView::OnSxsCompareInfo()
 {
 	if (!m_pCoordinator)
 		return;
-
 	String info = m_pCoordinator->FormatCompareInfoString();
 	AfxMessageBox(info.c_str(), MB_ICONINFORMATION);
 }
 
-// --- Copy Path / Copy Filename ---
+/////////////////////////////////////////////////////////////////////////////
+// Copy Path / Copy Filename
 
-void CDirPaneView::OnSxsCopyPath()
+void CDirSxSUnifiedView::OnSxsCopyPath()
 {
 	if (!m_pList)
 		return;
@@ -4432,10 +4730,10 @@ void CDirPaneView::OnSxsCopyPath()
 
 	const CDiffContext &ctxt = GetDiffContext();
 	const DIFFITEM &di = ctxt.GetDiffAt(key);
-	if (!di.diffcode.exists(m_nThisPane))
+	if (!di.diffcode.exists(m_nContextSide))
 		return;
 
-	String fullPath = di.getFilepath(m_nThisPane, ctxt.GetPath(m_nThisPane));
+	String fullPath = di.getFilepath(m_nContextSide, ctxt.GetPath(m_nContextSide));
 
 	if (OpenClipboard())
 	{
@@ -4456,7 +4754,7 @@ void CDirPaneView::OnSxsCopyPath()
 	}
 }
 
-void CDirPaneView::OnSxsCopyFilename()
+void CDirSxSUnifiedView::OnSxsCopyFilename()
 {
 	if (!m_pList)
 		return;
@@ -4471,7 +4769,7 @@ void CDirPaneView::OnSxsCopyFilename()
 
 	const CDiffContext &ctxt = GetDiffContext();
 	const DIFFITEM &di = ctxt.GetDiffAt(key);
-	int side = m_nThisPane;
+	int side = m_nContextSide;
 	if (!di.diffcode.exists(side))
 		return;
 
@@ -4496,56 +4794,50 @@ void CDirPaneView::OnSxsCopyFilename()
 	}
 }
 
-// --- Open With App / Open With... ---
+/////////////////////////////////////////////////////////////////////////////
+// Open With App / Open With...
 
-void CDirPaneView::OnSxsOpenWithApp()
+void CDirSxSUnifiedView::OnSxsOpenWithApp()
 {
 	if (!m_pList)
 		return;
-
 	int nItem = m_pList->GetNextItem(-1, LVNI_SELECTED);
 	if (nItem < 0)
 		return;
-
 	DIFFITEM *key = GetItemKey(nItem);
 	if (!key)
 		return;
-
 	const CDiffContext &ctxt = GetDiffContext();
 	const DIFFITEM &di = ctxt.GetDiffAt(key);
-	if (!di.diffcode.exists(m_nThisPane))
+	if (!di.diffcode.exists(m_nContextSide))
 		return;
-
-	String filePath = di.getFilepath(m_nThisPane, ctxt.GetPath(m_nThisPane));
+	String filePath = di.getFilepath(m_nContextSide, ctxt.GetPath(m_nContextSide));
 	ShellExecute(GetSafeHwnd(), _T("open"), filePath.c_str(), nullptr, nullptr, SW_SHOWNORMAL);
 }
 
-void CDirPaneView::OnSxsOpenWith()
+void CDirSxSUnifiedView::OnSxsOpenWith()
 {
 	if (!m_pList)
 		return;
-
 	int nItem = m_pList->GetNextItem(-1, LVNI_SELECTED);
 	if (nItem < 0)
 		return;
-
 	DIFFITEM *key = GetItemKey(nItem);
 	if (!key)
 		return;
-
 	const CDiffContext &ctxt = GetDiffContext();
 	const DIFFITEM &di = ctxt.GetDiffAt(key);
-	if (!di.diffcode.exists(m_nThisPane))
+	if (!di.diffcode.exists(m_nContextSide))
 		return;
-
-	String filePath = di.getFilepath(m_nThisPane, ctxt.GetPath(m_nThisPane));
+	String filePath = di.getFilepath(m_nContextSide, ctxt.GetPath(m_nContextSide));
 	String param = _T("shell32.dll,OpenAs_RunDLL ") + filePath;
 	ShellExecute(GetSafeHwnd(), _T("open"), _T("rundll32.exe"), param.c_str(), nullptr, SW_SHOWNORMAL);
 }
 
-// --- Explorer Context Menu ---
+/////////////////////////////////////////////////////////////////////////////
+// Explorer Context Menu
 
-void CDirPaneView::ShowExplorerContextMenu(const String& filePath, CPoint pt)
+void CDirSxSUnifiedView::ShowExplorerContextMenu(const String& filePath, CPoint pt)
 {
 	PIDLIST_ABSOLUTE pidlFolder = nullptr;
 	LPCITEMIDLIST pidlChild = nullptr;
@@ -4582,34 +4874,31 @@ void CDirPaneView::ShowExplorerContextMenu(const String& filePath, CPoint pt)
 	}
 }
 
-void CDirPaneView::OnSxsExplorerMenu()
+void CDirSxSUnifiedView::OnSxsExplorerMenu()
 {
 	if (!m_pList)
 		return;
-
 	int nItem = m_pList->GetNextItem(-1, LVNI_SELECTED);
 	if (nItem < 0)
 		return;
-
 	DIFFITEM *key = GetItemKey(nItem);
 	if (!key)
 		return;
-
 	const CDiffContext &ctxt = GetDiffContext();
 	const DIFFITEM &di = ctxt.GetDiffAt(key);
-	if (!di.diffcode.exists(m_nThisPane))
+	if (!di.diffcode.exists(m_nContextSide))
 		return;
-
-	String filePath = di.getFilepath(m_nThisPane, ctxt.GetPath(m_nThisPane));
+	String filePath = di.getFilepath(m_nContextSide, ctxt.GetPath(m_nContextSide));
 
 	CPoint pt;
 	GetCursorPos(&pt);
 	ShowExplorerContextMenu(filePath, pt);
 }
 
-// --- Select Left Only / Select Right Only ---
+/////////////////////////////////////////////////////////////////////////////
+// Select Left Only / Select Right Only
 
-void CDirPaneView::OnSxsSelectLeftOnly()
+void CDirSxSUnifiedView::OnSxsSelectLeftOnly()
 {
 	if (!m_pList || !GetDocument() || !GetDocument()->HasDiffs())
 		return;
@@ -4619,15 +4908,14 @@ void CDirPaneView::OnSxsSelectLeftOnly()
 	for (int i = 0; i < static_cast<int>(m_listViewItems.size()); i++)
 	{
 		DIFFITEM *key = GetItemKey(i);
-		if (!key)
-			continue;
+		if (!key) continue;
 		const DIFFITEM &di = ctxt.GetDiffAt(key);
 		if (di.diffcode.isSideFirstOnly())
 			m_pList->SetItemState(i, LVIS_SELECTED, LVIS_SELECTED);
 	}
 }
 
-void CDirPaneView::OnSxsSelectRightOnly()
+void CDirSxSUnifiedView::OnSxsSelectRightOnly()
 {
 	if (!m_pList || !GetDocument() || !GetDocument()->HasDiffs())
 		return;
@@ -4637,17 +4925,17 @@ void CDirPaneView::OnSxsSelectRightOnly()
 	for (int i = 0; i < static_cast<int>(m_listViewItems.size()); i++)
 	{
 		DIFFITEM *key = GetItemKey(i);
-		if (!key)
-			continue;
+		if (!key) continue;
 		const DIFFITEM &di = ctxt.GetDiffAt(key);
 		if (di.diffcode.isSideSecondOnly())
 			m_pList->SetItemState(i, LVIS_SELECTED, LVIS_SELECTED);
 	}
 }
 
-// --- Auto-expand All / Auto-expand Diff ---
+/////////////////////////////////////////////////////////////////////////////
+// Auto-expand
 
-void CDirPaneView::OnSxsAutoExpandAll()
+void CDirSxSUnifiedView::OnSxsAutoExpandAll()
 {
 	GetOptionsMgr()->SaveOption(OPT_DIRVIEW_SXS_AUTO_EXPAND_MODE, 1);
 	if (m_pCoordinator)
@@ -4657,7 +4945,7 @@ void CDirPaneView::OnSxsAutoExpandAll()
 	}
 }
 
-void CDirPaneView::OnSxsAutoExpandDiff()
+void CDirSxSUnifiedView::OnSxsAutoExpandDiff()
 {
 	GetOptionsMgr()->SaveOption(OPT_DIRVIEW_SXS_AUTO_EXPAND_MODE, 2);
 	if (m_pCoordinator)
@@ -4667,67 +4955,53 @@ void CDirPaneView::OnSxsAutoExpandDiff()
 	}
 }
 
-void CDirPaneView::OnUpdateSxsAutoExpandAll(CCmdUI* pCmdUI)
+void CDirSxSUnifiedView::OnUpdateSxsAutoExpandAll(CCmdUI* pCmdUI)
 {
 	pCmdUI->SetRadio(GetOptionsMgr()->GetInt(OPT_DIRVIEW_SXS_AUTO_EXPAND_MODE) == 1);
 }
 
-void CDirPaneView::OnUpdateSxsAutoExpandDiff(CCmdUI* pCmdUI)
+void CDirSxSUnifiedView::OnUpdateSxsAutoExpandDiff(CCmdUI* pCmdUI)
 {
 	pCmdUI->SetRadio(GetOptionsMgr()->GetInt(OPT_DIRVIEW_SXS_AUTO_EXPAND_MODE) == 2);
 }
 
-// --- Align With ---
+/////////////////////////////////////////////////////////////////////////////
+// Align With
 
-void CDirPaneView::OnSxsAlignWith()
+void CDirSxSUnifiedView::OnSxsAlignWith()
 {
 	if (!m_pCoordinator || !m_pList)
 		return;
 
-	// Get selected item on this pane
-	int nItem = m_pList->GetNextItem(-1, LVNI_SELECTED);
-	if (nItem < 0)
-		return;
-
-	DIFFITEM *thisKey = GetItemKey(nItem);
-	if (!thisKey)
-		return;
-
-	// Get selected item on the other pane
-	CDirPaneView *pOtherPane = (m_nThisPane == 0) ?
-		m_pCoordinator->GetRightPaneView() : m_pCoordinator->GetLeftPaneView();
-	if (!pOtherPane)
-		return;
-
-	CListCtrl &otherList = pOtherPane->GetListCtrl();
-	int nOtherItem = otherList.GetNextItem(-1, LVNI_SELECTED);
-	if (nOtherItem < 0)
+	// In unified view, alignment works differently since there's a single list.
+	// The user selects two items and we align them across sides.
+	int nCount = m_pList->GetSelectedCount();
+	if (nCount < 2)
 	{
-		AfxMessageBox(_T("Please select an item on the other pane to align with."), MB_ICONINFORMATION);
+		AfxMessageBox(_T("Please select two items to align with each other."), MB_ICONINFORMATION);
 		return;
 	}
 
-	DIFFITEM *otherKey = pOtherPane->GetItemKey(nOtherItem);
-	if (!otherKey)
+	// Get first two selected items
+	int nFirst = m_pList->GetNextItem(-1, LVNI_SELECTED);
+	int nSecond = m_pList->GetNextItem(nFirst, LVNI_SELECTED);
+
+	DIFFITEM *firstKey = GetItemKey(nFirst);
+	DIFFITEM *secondKey = GetItemKey(nSecond);
+	if (!firstKey || !secondKey)
 		return;
 
-	// Determine left/right items based on pane index
-	DIFFITEM *leftItem = (m_nThisPane == 0) ? thisKey : otherKey;
-	DIFFITEM *rightItem = (m_nThisPane == 0) ? otherKey : thisKey;
-
-	m_pCoordinator->AddAlignmentOverride(leftItem, rightItem);
+	// First selected = left item, second = right item
+	m_pCoordinator->AddAlignmentOverride(firstKey, secondKey);
 	m_pCoordinator->Redisplay();
 
 	m_pCoordinator->LogOperation(_T("Added alignment override"));
 }
 
-// --- Customize Keys ---
+/////////////////////////////////////////////////////////////////////////////
+// Customize Keys
 
-/**
- * @brief Dialog proc for the Customize Keys dialog.
- * A simple list showing command names and current key bindings.
- */
-static INT_PTR CALLBACK CustomizeKeysDlgProc(HWND hDlg, UINT msg, WPARAM wParam, LPARAM lParam)
+static INT_PTR CALLBACK UnifiedCustomizeKeysDlgProc(HWND hDlg, UINT msg, WPARAM wParam, LPARAM lParam)
 {
 	switch (msg)
 	{
@@ -4737,11 +5011,9 @@ static INT_PTR CALLBACK CustomizeKeysDlgProc(HWND hDlg, UINT msg, WPARAM wParam,
 			HWND hList = GetDlgItem(hDlg, 1001);
 			if (hList)
 			{
-				// Populate with command info
-				auto *pBindings = reinterpret_cast<std::map<UINT, CDirPaneView::KeyBinding>*>(lParam);
+				auto *pBindings = reinterpret_cast<std::map<UINT, CDirSxSUnifiedView::KeyBinding>*>(lParam);
 				if (pBindings)
 				{
-					int idx = 0;
 					for (auto &kv : *pBindings)
 					{
 						String desc = strutils::format(_T("Command %u: VK=%u Ctrl=%d Shift=%d Alt=%d"),
@@ -4750,7 +5022,6 @@ static INT_PTR CALLBACK CustomizeKeysDlgProc(HWND hDlg, UINT msg, WPARAM wParam,
 							kv.second.bShift ? 1 : 0,
 							kv.second.bAlt ? 1 : 0);
 						SendMessage(hList, LB_ADDSTRING, 0, (LPARAM)desc.c_str());
-						idx++;
 					}
 				}
 			}
@@ -4767,38 +5038,34 @@ static INT_PTR CALLBACK CustomizeKeysDlgProc(HWND hDlg, UINT msg, WPARAM wParam,
 	return FALSE;
 }
 
-static DLGTEMPLATE* BuildCustomizeKeysDlgTemplate(BYTE* buffer, size_t bufSize)
+static DLGTEMPLATE* BuildUnifiedCustomizeKeysDlgTemplate(BYTE* buffer, size_t bufSize)
 {
 	memset(buffer, 0, bufSize);
 	const int DLG_W = 350, DLG_H = 250;
 
 	DLGTEMPLATE* pDlg = (DLGTEMPLATE*)buffer;
 	pDlg->style = DS_MODALFRAME | DS_CENTER | WS_POPUP | WS_CAPTION | WS_SYSMENU;
-	pDlg->cdit = 2; // List + OK
+	pDlg->cdit = 2;
 	pDlg->x = 0; pDlg->y = 0;
 	pDlg->cx = DLG_W; pDlg->cy = DLG_H;
 
 	WORD* pw = (WORD*)(pDlg + 1);
-	*pw++ = 0;
-	*pw++ = 0;
+	*pw++ = 0; *pw++ = 0;
 	const wchar_t dlgTitle[] = L"Customize Key Bindings";
 	memcpy(pw, dlgTitle, sizeof(dlgTitle));
 	pw += _countof(dlgTitle);
 	pw = (WORD*)(((ULONG_PTR)pw + 3) & ~3);
 
-	// List box (id=1001)
 	DLGITEMTEMPLATE* pItem = (DLGITEMTEMPLATE*)pw;
 	pItem->style = WS_CHILD | WS_VISIBLE | WS_BORDER | WS_VSCROLL | LBS_NOINTEGRALHEIGHT;
 	pItem->x = 5; pItem->y = 5;
 	pItem->cx = DLG_W - 10; pItem->cy = DLG_H - 35;
 	pItem->id = 1001;
 	pw = (WORD*)(pItem + 1);
-	*pw++ = 0xFFFF; *pw++ = 0x0083; // Listbox class
-	*pw++ = 0;
-	*pw++ = 0;
+	*pw++ = 0xFFFF; *pw++ = 0x0083;
+	*pw++ = 0; *pw++ = 0;
 	pw = (WORD*)(((ULONG_PTR)pw + 3) & ~3);
 
-	// OK button
 	pItem = (DLGITEMTEMPLATE*)pw;
 	pItem->style = WS_CHILD | WS_VISIBLE | BS_DEFPUSHBUTTON | WS_TABSTOP;
 	pItem->x = DLG_W / 2 - 25; pItem->y = DLG_H - 22; pItem->cx = 50; pItem->cy = 14;
@@ -4813,22 +5080,19 @@ static DLGTEMPLATE* BuildCustomizeKeysDlgTemplate(BYTE* buffer, size_t bufSize)
 	return pDlg;
 }
 
-void CDirPaneView::OnSxsCustomizeKeys()
+void CDirSxSUnifiedView::OnSxsCustomizeKeys()
 {
 	BYTE dlgBuf[1024];
-	DLGTEMPLATE* pDlgTmpl = BuildCustomizeKeysDlgTemplate(dlgBuf, sizeof(dlgBuf));
+	DLGTEMPLATE* pDlgTmpl = BuildUnifiedCustomizeKeysDlgTemplate(dlgBuf, sizeof(dlgBuf));
 
 	DialogBoxIndirectParam(AfxGetInstanceHandle(), pDlgTmpl,
-		m_hWnd, CustomizeKeysDlgProc, reinterpret_cast<LPARAM>(&m_keyBindings));
+		m_hWnd, UnifiedCustomizeKeysDlgProc, reinterpret_cast<LPARAM>(&m_keyBindings));
 }
 
-// --- Load / Save Key Bindings ---
+/////////////////////////////////////////////////////////////////////////////
+// Load / Save Key Bindings
 
-/**
- * @brief Load key bindings from options.
- * Format: "cmdId:vk:ctrl:shift:alt;cmdId:vk:ctrl:shift:alt;..."
- */
-void CDirPaneView::LoadKeyBindings()
+void CDirSxSUnifiedView::LoadKeyBindings()
 {
 	m_keyBindings.clear();
 	String bindings = GetOptionsMgr()->GetString(OPT_DIRVIEW_SXS_KEY_BINDINGS);
@@ -4845,7 +5109,6 @@ void CDirPaneView::LoadKeyBindings()
 		String entry = bindings.substr(pos, semi - pos);
 		pos = semi + 1;
 
-		// Parse "cmdId:vk:ctrl:shift:alt"
 		UINT cmdId = 0, vk = 0;
 		int ctrl = 0, shift = 0, alt = 0;
 		if (_stscanf_s(entry.c_str(), _T("%u:%u:%d:%d:%d"), &cmdId, &vk, &ctrl, &shift, &alt) == 5)
@@ -4860,10 +5123,7 @@ void CDirPaneView::LoadKeyBindings()
 	}
 }
 
-/**
- * @brief Save key bindings to options.
- */
-void CDirPaneView::SaveKeyBindings()
+void CDirSxSUnifiedView::SaveKeyBindings()
 {
 	String result;
 	for (const auto& kv : m_keyBindings)
@@ -4879,10 +5139,10 @@ void CDirPaneView::SaveKeyBindings()
 	GetOptionsMgr()->SaveOption(OPT_DIRVIEW_SXS_KEY_BINDINGS, result);
 }
 
-/**
- * @brief Navigate to a new folder path on this pane.
- */
-void CDirPaneView::NavigateToPath(const String& sPath)
+/////////////////////////////////////////////////////////////////////////////
+// Navigate to path
+
+void CDirSxSUnifiedView::NavigateToPath(const String& sPath)
 {
 	CDirDoc* pDoc = GetDocument();
 	if (!pDoc || !pDoc->HasDiffs())
@@ -4890,8 +5150,8 @@ void CDirPaneView::NavigateToPath(const String& sPath)
 
 	const CDiffContext& ctxt = pDoc->GetDiffContext();
 	PathContext paths = ctxt.GetNormalizedPaths();
-	if (m_nThisPane >= 0 && m_nThisPane < paths.GetSize())
-		paths.SetPath(m_nThisPane, sPath);
+	if (m_nContextSide >= 0 && m_nContextSide < paths.GetSize())
+		paths.SetPath(m_nContextSide, sPath);
 
 	fileopenflags_t dwFlags[3] = {};
 	GetMainFrame()->DoFileOrFolderOpen(&paths, dwFlags, nullptr, _T(""),

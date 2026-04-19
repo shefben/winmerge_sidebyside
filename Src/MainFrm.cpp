@@ -779,8 +779,18 @@ void CMainFrame::OnInitMenuPopup(CMenu* pPopupMenu, UINT nIndex, BOOL bSysMenu)
 /////////////////////////////////////////////////////////////////////////////
 // CMainFrame message handlers
 
-void CMainFrame::OnFileOpen() 
+void CMainFrame::OnFileOpen()
 {
+	if (GetOptionsMgr()->GetBool(OPT_DIRVIEW_SIDEBYSIDE_MODE))
+	{
+		CMultiDocTemplate *pTpl = theApp.GetWelcomeTemplate();
+		if (pTpl)
+		{
+			CDocument *pDoc = pTpl->OpenDocumentFile(nullptr);
+			if (pDoc)
+				return;
+		}
+	}
 	DoFileOrFolderOpen();
 }
 

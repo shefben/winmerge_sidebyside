@@ -75,36 +75,53 @@ LRESULT COpenFrame::OnNcHitTest(CPoint point)
 void COpenFrame::OnWindowPosChanging(WINDOWPOS* lpwndpos)
 {
 	// Retain frame sizes during tile operations (tolerate overlapping)
+	// Only apply view-based sizing for CScrollView (COpenView with dialog template).
+	// For plain CView subclasses (e.g. CDirSxSWelcomeView), let default sizing proceed.
 	if ((lpwndpos->flags & (SWP_NOSIZE | SWP_NOOWNERZORDER)) == 0 && !IsZoomed())
 	{
-		if (CScrollView *const pView = static_cast<CScrollView*>(GetActiveView()))
+		if (CView *const pView = GetActiveView())
 		{
-			CRect rc;
-			pView->GetWindowRect(&rc);
-			CalcWindowRect(&rc, CWnd::adjustOutside);
-			lpwndpos->cx = rc.Width();
-			lpwndpos->cy = rc.Height();
+			if (pView->IsKindOf(RUNTIME_CLASS(CScrollView)))
+			{
+				CRect rc;
+				pView->GetWindowRect(&rc);
+				CalcWindowRect(&rc, CWnd::adjustOutside);
+				lpwndpos->cx = rc.Width();
+				lpwndpos->cy = rc.Height();
+			}
 		}
 	}
 }
 
-void COpenFrame::ActivateFrame(int nCmdShow) 
+void COpenFrame::ActivateFrame(int nCmdShow)
 {
-	__super::ActivateFrame(nCmdShow);
-	if (CView *const pView = GetActiveView())
+	CView *const pView = GetActiveView();
+	bool bIsFormView = pView && pView->IsKindOf(RUNTIME_CLASS(CScrollView));
+
+	if (pView && !bIsFormView)
 	{
-		if (!IsZoomed())
-		{
-			WINDOWPLACEMENT wp = { sizeof wp };
-			GetWindowPlacement(&wp);
-			CRect rc;
-			pView->GetWindowRect(&rc);
-			CalcWindowRect(&rc, CWnd::adjustOutside);
-			wp.rcNormalPosition.right = wp.rcNormalPosition.left + rc.Width();
-			wp.rcNormalPosition.bottom = wp.rcNormalPosition.top + rc.Height();
-			SetWindowPlacement(&wp);
-			pView->ShowWindow(SW_SHOW);
-		}
+		// Plain CView (e.g. CDirSxSWelcomeView) has no dialog template, so
+		// its GetWindowRect() returns near-zero before first paint.
+		// Bypass CMergeFrameCommon (which reads registry for normal/maximized
+		// state) and go straight to CMDIChildWnd with SW_SHOWMAXIMIZED.
+		CMDIChildWnd::ActivateFrame(SW_SHOWMAXIMIZED);
+		pView->ShowWindow(SW_SHOW);
+		return;
+	}
+
+	// CScrollView path (COpenView) — use existing chain
+	__super::ActivateFrame(nCmdShow);
+	if (pView && !IsZoomed())
+	{
+		WINDOWPLACEMENT wp = { sizeof wp };
+		GetWindowPlacement(&wp);
+		CRect rc;
+		pView->GetWindowRect(&rc);
+		CalcWindowRect(&rc, CWnd::adjustOutside);
+		wp.rcNormalPosition.right = wp.rcNormalPosition.left + rc.Width();
+		wp.rcNormalPosition.bottom = wp.rcNormalPosition.top + rc.Height();
+		SetWindowPlacement(&wp);
+		pView->ShowWindow(SW_SHOW);
 	}
 }
 

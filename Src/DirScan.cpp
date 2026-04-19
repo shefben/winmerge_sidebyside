@@ -8,7 +8,11 @@
 #include "DirScan.h"
 #include <cassert>
 #include <memory>
+#include <atomic>
+#include <vector>
 #include <thread>
+#include <queue>
+#include <mutex>
 #define POCO_NO_UNWINDOWS 1
 #include <Poco/Semaphore.h>
 #include <Poco/Notification.h>
@@ -146,6 +150,11 @@ int DirScan_GetItems(const PathContext &paths, const String subdir[],
 	static const tchar_t backslash[] = _T("\\");
 	int nDirs = paths.GetSize();
 	CDiffContext *pCtxt = myStruct->context;
+
+	// Set the active scan parent for UI hourglass indicator (SxS mode)
+	if (parent && pCtxt)
+		pCtxt->m_pActiveScanParent.store(parent, std::memory_order_relaxed);
+
 	String sDir[3];
 	String subprefix[3];
 
@@ -198,6 +207,13 @@ int DirScan_GetItems(const PathContext &paths, const String subdir[],
 		if (nIndex == nDirs)
 			return 0;
 	}
+
+	// Collect subdirectory recursive tasks for parallel execution
+	struct SubdirTask {
+		String newsubdir[3];
+		DIFFITEM *me;
+	};
+	std::vector<SubdirTask> subdirTasks;
 
 	DirItemArray::size_type i=0, j=0, k=0;
 	while (true)
@@ -293,39 +309,38 @@ int DirScan_GetItems(const PathContext &paths, const String subdir[],
 		}
 		else
 		{
-			// Recursive compare
+			// Recursive compare — add dir item sequentially, collect recursive task
 			assert(pCtxt->m_bRecursive);
 			if (nDirs < 3)
 			{
-				DIFFITEM *me = AddToList(subdir[0], subdir[1], 
-					(nDiffCode & DIFFCODE::FIRST ) ? &dirs[0][i] : nullptr, 
+				DIFFITEM *me = AddToList(subdir[0], subdir[1],
+					(nDiffCode & DIFFCODE::FIRST ) ? &dirs[0][i] : nullptr,
 					(nDiffCode & DIFFCODE::SECOND) ? &dirs[1][j] : nullptr,
 					nDiffCode, myStruct, parent);
 				if ((me->diffcode.diffcode & DIFFCODE::SKIPPED) == 0 && ((nDiffCode & DIFFCODE::SIDEFLAGS) == DIFFCODE::BOTH || bUniques))
 				{
-					// Scan recursively all subdirectories too, we are not adding folders
-					String newsubdir[3] = {leftnewsub, rightnewsub};
-					int result = DirScan_GetItems(paths, newsubdir, myStruct, casesensitive,
-							depth - 1, me, bUniques);
-					if (result == -1)
-						return -1;
+					SubdirTask task;
+					task.newsubdir[0] = leftnewsub;
+					task.newsubdir[1] = rightnewsub;
+					task.me = me;
+					subdirTasks.push_back(std::move(task));
 				}
 			}
 			else
 			{
-				DIFFITEM *me = AddToList(subdir[0], subdir[1], subdir[2], 
+				DIFFITEM *me = AddToList(subdir[0], subdir[1], subdir[2],
 					(nDiffCode & DIFFCODE::FIRST ) ? &dirs[0][i] : nullptr,
 					(nDiffCode & DIFFCODE::SECOND) ? &dirs[1][j] : nullptr,
 					(nDiffCode & DIFFCODE::THIRD ) ? &dirs[2][k] : nullptr,
 					nDiffCode, myStruct, parent);
 				if ((me->diffcode.diffcode & DIFFCODE::SKIPPED) == 0 && ((nDiffCode & DIFFCODE::SIDEFLAGS) == DIFFCODE::ALL || bUniques))
 				{
-					// Scan recursively all subdirectories too, we are not adding folders
-					String newsubdir[3] = {leftnewsub, middlenewsub, rightnewsub};
-					int result = DirScan_GetItems(paths, newsubdir, myStruct, casesensitive,
-							depth - 1, me, bUniques);
-					if (result == -1)
-						return -1;
+					SubdirTask task;
+					task.newsubdir[0] = leftnewsub;
+					task.newsubdir[1] = middlenewsub;
+					task.newsubdir[2] = rightnewsub;
+					task.me = me;
+					subdirTasks.push_back(std::move(task));
 				}
 			}
 		}
@@ -447,6 +462,52 @@ int DirScan_GetItems(const PathContext &paths, const String subdir[],
 		break;
 	}
 
+	// Launch parallel subdirectory scans. Each recursive call operates on a
+	// different parent DIFFITEM, so AddChildToParent calls don't conflict.
+	// IncreaseTotalItems uses std::atomic_int and Semaphore::set() is thread-safe.
+	if (!subdirTasks.empty())
+	{
+		const unsigned maxThreads = std::min(
+			static_cast<unsigned>(subdirTasks.size()),
+			std::max(1u, std::thread::hardware_concurrency()));
+		if (maxThreads > 1 && subdirTasks.size() > 1)
+		{
+			std::vector<std::thread> threads;
+			std::atomic<int> result{1};
+			std::atomic<size_t> nextTask{0};
+			for (unsigned t = 0; t < maxThreads; t++)
+			{
+				threads.emplace_back([&]() {
+					size_t idx;
+					while ((idx = nextTask.fetch_add(1)) < subdirTasks.size())
+					{
+						if (pCtxt->ShouldAbort()) break;
+						int r = DirScan_GetItems(paths, subdirTasks[idx].newsubdir,
+							myStruct, casesensitive, depth - 1,
+							subdirTasks[idx].me, bUniques);
+						if (r == -1)
+							result.store(-1);
+					}
+				});
+			}
+			for (auto& t : threads)
+				t.join();
+			if (result.load() == -1)
+				return -1;
+		}
+		else
+		{
+			// Single subdirectory — sequential (avoids thread overhead)
+			for (auto& task : subdirTasks)
+			{
+				int r = DirScan_GetItems(paths, task.newsubdir, myStruct,
+					casesensitive, depth - 1, task.me, bUniques);
+				if (r == -1)
+					return -1;
+			}
+		}
+	}
+
 	if (parent != nullptr)
 	{
 		for (int nIndex = 0; nIndex < nDirs; ++nIndex)
@@ -475,9 +536,23 @@ int DirScan_GetItems(const PathContext &paths, const String subdir[],
  * @param parentdiffpos [in] Position of parent diff item 
  * @return >= 0 number of diff items, -1 if compare was aborted
  */
+static int CompareItemsInline(DiffFuncStruct *myStruct, DIFFITEM *parentdiffpos);
+
 int DirScan_CompareItems(DiffFuncStruct *myStruct, DIFFITEM *parentdiffpos)
 {
 	const int compareMethod = myStruct->context->GetCompareMethod();
+
+	// FAST PATH: For lightweight compare methods (date, size, existence),
+	// bypass the heavy ThreadPool + NotificationQueue machinery and compare
+	// items directly inline. These methods only check metadata already in
+	// memory, so the queue/thread overhead dominates the actual work.
+	if (compareMethod == CMP_DATE || compareMethod == CMP_DATE_SIZE ||
+		compareMethod == CMP_SIZE || compareMethod == CMP_EXISTENCE)
+	{
+		myStruct->context->m_pCompareStats->SetCompareThreadCount(1);
+		return CompareItemsInline(myStruct, parentdiffpos);
+	}
+
 	int nworkers = 1;
 
 	if (compareMethod == CMP_CONTENT || compareMethod == CMP_QUICK_CONTENT ||
@@ -608,6 +683,113 @@ static int CompareItems(NotificationQueue& queue, DiffFuncStruct *myStruct, DIFF
 	}
 
 	return bCompareFailure || pCtxt->ShouldAbort() ? -1 : res;
+}
+
+/**
+ * @brief Recursive helper for inline comparison — walks DIFFITEM tree
+ * without any per-item semaphore waits (collection already complete).
+ */
+static int CompareItemsInlineRecursive(DiffFuncStruct *myStruct, FolderCmp *fc,
+	Stopwatch *sw, DIFFITEM *parentdiffpos)
+{
+	CDiffContext *pCtxt = myStruct->context;
+	int res = 0;
+	bool bCompareFailure = false;
+	int nDirs = pCtxt->GetCompareDirs();
+	DIFFITEM *pos = pCtxt->GetFirstChildDiffPosition(parentdiffpos);
+	while (pos != nullptr)
+	{
+		if (pCtxt->ShouldAbort())
+		{
+			res = -1;
+			break;
+		}
+
+		if (sw->elapsed() > 2000000)
+		{
+			int event = CDiffThread::EVENT_COMPARE_PROGRESSED;
+			myStruct->m_listeners.notify(myStruct, event);
+			sw->restart();
+		}
+		// NO per-item semaphore wait — collection is already complete
+		DIFFITEM *curpos = pos;
+		DIFFITEM &di = pCtxt->GetNextSiblingDiffRefPosition(pos);
+		bool existsalldirs = di.diffcode.existAll();
+
+		if (di.diffcode.isDirectory() && pCtxt->m_bRecursive)
+		{
+			if ((di.diffcode.diffcode & DIFFCODE::CMPERR) != DIFFCODE::CMPERR)
+				di.diffcode.diffcode &= ~(DIFFCODE::DIFF | DIFFCODE::SAME);
+			int ndiff = CompareItemsInlineRecursive(myStruct, fc, sw, curpos);
+			if (ndiff > 0)
+			{
+				if (existsalldirs || pCtxt->m_bWalkUniques)
+					di.diffcode.diffcode |= DIFFCODE::DIFF;
+				res += ndiff;
+			}
+			else if (ndiff == 0)
+			{
+				if (existsalldirs)
+					di.diffcode.diffcode |= DIFFCODE::SAME;
+				else if (pCtxt->m_bWalkUniques && !di.diffcode.isResultFiltered())
+					di.diffcode.diffcode |= DIFFCODE::DIFF;
+			}
+			else if (ndiff == -1)
+			{
+				di.diffcode.diffcode |= DIFFCODE::CMPERR;
+				bCompareFailure = true;
+			}
+
+			if (nDirs == 3 && (di.diffcode.diffcode & DIFFCODE::COMPAREFLAGS) == DIFFCODE::DIFF && !di.diffcode.isResultFiltered())
+			{
+				di.diffcode.diffcode &= ~DIFFCODE::COMPAREFLAGS3WAY;
+				di.diffcode.diffcode |= GetDirCompareFlags3Way(di);
+			}
+		}
+
+		// Compare directly inline — no queue, no heap alloc, no mutex
+		pCtxt->m_pCompareStats->BeginCompare(&di, 0);
+		CompareDiffItem(*fc, di);
+
+		if (di.diffcode.isResultError())
+		{
+			DIFFITEM *diParent = di.GetParentLink();
+			if (diParent != nullptr)
+			{
+				diParent->diffcode.diffcode |= DIFFCODE::CMPERR;
+				bCompareFailure = true;
+			}
+		}
+		if (di.diffcode.isResultDiff() ||
+			(!di.diffcode.existAll() && !di.diffcode.isResultFiltered()))
+			res++;
+
+		pos = curpos;
+		pCtxt->GetNextSiblingDiffRefPosition(pos);
+	}
+
+	return bCompareFailure || pCtxt->ShouldAbort() ? -1 : res;
+}
+
+/**
+ * @brief Inline comparison for lightweight compare methods (date, size, existence).
+ *
+ * Waits for the collection thread to finish completely FIRST, then iterates
+ * all items without any per-item semaphore waits. For metadata-only comparisons
+ * each item takes sub-microsecond, so there's no benefit to overlapping
+ * collection and comparison. Waiting eliminates 20K+ kernel-mode semaphore waits.
+ */
+static int CompareItemsInline(DiffFuncStruct *myStruct, DIFFITEM *parentdiffpos)
+{
+	// Wait for collection to finish completely before comparing.
+	myStruct->m_collectCompletedEvent.wait();
+
+	CDiffContext *pCtxt = myStruct->context;
+	FolderCmp fc(pCtxt);
+	Stopwatch stopwatch;
+	stopwatch.start();
+
+	return CompareItemsInlineRecursive(myStruct, &fc, &stopwatch, parentdiffpos);
 }
 
 /**
@@ -1103,4 +1285,278 @@ static unsigned GetDirCompareFlags3Way(const DIFFITEM& di)
 	}
 
 	return code;
+}
+
+/**
+ * @brief Propagate directory DIFF/SAME status from children up to parent.
+ *
+ * After BFS completes, directory items don't have DIFF/SAME flags yet because
+ * those are normally set by the recursive compare walking bottom-up. This
+ * function walks the tree post-order (children first) and sets flags.
+ */
+static void PropagateDirStatus(CDiffContext *pCtxt, DIFFITEM *parent)
+{
+	DIFFITEM *pos = pCtxt->GetFirstChildDiffPosition(parent);
+	while (pos != nullptr)
+	{
+		DIFFITEM *curpos = pos;
+		DIFFITEM &di = pCtxt->GetNextSiblingDiffRefPosition(pos);
+
+		if (di.diffcode.isDirectory())
+		{
+			// First recurse into children
+			if (di.HasChildren())
+				PropagateDirStatus(pCtxt, curpos);
+
+			// Now propagate: check if any children are DIFF
+			bool hasDiff = false;
+			bool hasAny = false;
+			DIFFITEM *child = pCtxt->GetFirstChildDiffPosition(curpos);
+			while (child != nullptr)
+			{
+				DIFFITEM &cdi = pCtxt->GetNextSiblingDiffRefPosition(child);
+				hasAny = true;
+				if (cdi.diffcode.isResultDiff() ||
+					(!cdi.diffcode.existAll() && !cdi.diffcode.isResultFiltered()))
+				{
+					hasDiff = true;
+					break;
+				}
+			}
+
+			// Clear old flags and set based on children
+			if ((di.diffcode.diffcode & DIFFCODE::CMPERR) != DIFFCODE::CMPERR)
+			{
+				di.diffcode.diffcode &= ~(DIFFCODE::DIFF | DIFFCODE::SAME);
+				if (hasDiff)
+					di.diffcode.diffcode |= DIFFCODE::DIFF;
+				else if (di.diffcode.existAll())
+					di.diffcode.diffcode |= DIFFCODE::SAME;
+				else if (pCtxt->m_bWalkUniques && !di.diffcode.isResultFiltered())
+					di.diffcode.diffcode |= DIFFCODE::DIFF;
+			}
+		}
+
+		pos = curpos;
+		pCtxt->GetNextSiblingDiffRefPosition(pos);
+	}
+}
+
+/**
+ * @brief BFS (breadth-first) directory scanner with inline comparison.
+ *
+ * Scans one directory level at a time, compares files inline at each level,
+ * and fires progress events so the UI updates progressively. Supports a
+ * priority queue: if the user expands a not-yet-scanned folder, that folder
+ * is scanned immediately before continuing the BFS queue.
+ *
+ * This function combines collection + comparison into one pass for lightweight
+ * compare methods (CMP_DATE_SIZE, CMP_EXISTENCE, etc.) where each comparison
+ * is sub-microsecond. The compare thread should be a no-op when using this.
+ */
+void DirScan_GetItemsBFS(DiffFuncStruct *myStruct)
+{
+	CDiffContext *pCtxt = myStruct->context;
+	bool casesensitive = false;
+	bool bUniques = pCtxt->m_bWalkUniques;
+	PathContext paths = pCtxt->GetNormalizedPaths();
+	FolderCmp fc(pCtxt);
+
+	// BFS queue: each entry is a (parent DIFFITEM*, subdir[]) pair
+	struct BFSEntry {
+		DIFFITEM *parent;
+		String subdir[3];
+	};
+	std::queue<BFSEntry> bfsQueue;
+
+	// Seed with root level
+	BFSEntry root;
+	root.parent = nullptr;
+	root.subdir[0] = _T("");
+	root.subdir[1] = _T("");
+	root.subdir[2] = _T("");
+	bfsQueue.push(std::move(root));
+
+	Stopwatch stopwatch;
+	stopwatch.start();
+
+	while (!bfsQueue.empty())
+	{
+		if (pCtxt->ShouldAbort())
+			return;
+
+		// Check priority queue first — user-expanded folders jump ahead
+		{
+			std::lock_guard<std::mutex> lock(myStruct->m_priorityMutex);
+			while (!myStruct->m_priorityQueue.empty())
+			{
+				DIFFITEM *priorityFolder = myStruct->m_priorityQueue.front();
+				myStruct->m_priorityQueue.pop_front();
+
+				// Only process if it's a directory that hasn't been scanned yet
+				if (priorityFolder && priorityFolder->diffcode.isDirectory() &&
+					!priorityFolder->HasChildren())
+				{
+					// Build the subdir path from the DIFFITEM's path info
+					BFSEntry entry;
+					entry.parent = priorityFolder;
+					int nDirs = pCtxt->GetCompareDirs();
+					for (int side = 0; side < nDirs; side++)
+					{
+						String p = priorityFolder->diffFileInfo[side].path.get();
+						String fn = priorityFolder->diffFileInfo[side].filename.get();
+						if (p.empty())
+							entry.subdir[side] = fn;
+						else
+							entry.subdir[side] = p + _T("\\") + fn;
+					}
+
+					// Scan this priority folder's level (depth=0)
+					DirScan_GetItems(paths, entry.subdir, myStruct,
+						casesensitive, 0, entry.parent, bUniques);
+
+					// If this priority folder is empty, mark as scanned
+					if (!entry.parent->HasChildren())
+					{
+						if ((entry.parent->diffcode.diffcode & DIFFCODE::CMPERR) != DIFFCODE::CMPERR)
+						{
+							entry.parent->diffcode.diffcode &= ~(DIFFCODE::DIFF | DIFFCODE::SAME);
+							if (entry.parent->diffcode.existAll())
+								entry.parent->diffcode.diffcode |= DIFFCODE::SAME;
+							else
+								entry.parent->diffcode.diffcode |= DIFFCODE::DIFF;
+						}
+					}
+
+					// Compare files at this level inline
+					DIFFITEM *childPos = pCtxt->GetFirstChildDiffPosition(entry.parent);
+					while (childPos != nullptr)
+					{
+						DIFFITEM &childDi = pCtxt->GetNextSiblingDiffRefPosition(childPos);
+						if (!childDi.diffcode.isDirectory())
+						{
+							pCtxt->m_pCompareStats->BeginCompare(&childDi, 0);
+							CompareDiffItem(fc, childDi);
+						}
+					}
+
+					// Enqueue this folder's subdirectories for further BFS
+					childPos = pCtxt->GetFirstChildDiffPosition(entry.parent);
+					while (childPos != nullptr)
+					{
+						DIFFITEM *childPtr = childPos;
+						DIFFITEM &childDi = pCtxt->GetNextSiblingDiffRefPosition(childPos);
+						if (childDi.diffcode.isDirectory() &&
+							(childDi.diffcode.diffcode & DIFFCODE::SKIPPED) == 0 &&
+							(childDi.diffcode.existAll() || bUniques))
+						{
+							BFSEntry childEntry;
+							childEntry.parent = childPtr;
+							int nD = pCtxt->GetCompareDirs();
+							for (int side = 0; side < nD; side++)
+							{
+								String p = childDi.diffFileInfo[side].path.get();
+								String fn = childDi.diffFileInfo[side].filename.get();
+								if (p.empty())
+									childEntry.subdir[side] = fn;
+								else
+									childEntry.subdir[side] = p + _T("\\") + fn;
+							}
+							bfsQueue.push(std::move(childEntry));
+						}
+					}
+
+					// Fire progress so UI refreshes with the priority folder's contents
+					int event = CDiffThread::EVENT_COMPARE_PROGRESSED;
+					myStruct->m_listeners.notify(myStruct, event);
+				}
+			}
+		}
+
+		// Process next BFS level entry
+		BFSEntry entry = std::move(bfsQueue.front());
+		bfsQueue.pop();
+
+		// Skip if this folder was already scanned (e.g. by priority queue)
+		if (entry.parent != nullptr && entry.parent->HasChildren())
+			continue;
+
+		// Set active scan parent for UI hourglass indicator
+		pCtxt->m_pActiveScanParent.store(entry.parent, std::memory_order_relaxed);
+
+		// Scan this directory level only (depth=0)
+		DirScan_GetItems(paths, entry.subdir, myStruct,
+			casesensitive, 0, entry.parent, bUniques);
+
+		// If this directory is empty (no children after scan), mark it as
+		// scanned so the UI doesn't show a perpetual "pending" icon.
+		if (entry.parent != nullptr && !entry.parent->HasChildren())
+		{
+			if ((entry.parent->diffcode.diffcode & DIFFCODE::CMPERR) != DIFFCODE::CMPERR)
+			{
+				entry.parent->diffcode.diffcode &= ~(DIFFCODE::DIFF | DIFFCODE::SAME);
+				if (entry.parent->diffcode.existAll())
+					entry.parent->diffcode.diffcode |= DIFFCODE::SAME;
+				else
+					entry.parent->diffcode.diffcode |= DIFFCODE::DIFF;
+			}
+		}
+
+		// Compare files at this level inline (sub-microsecond for CMP_DATE_SIZE)
+		DIFFITEM *pos = pCtxt->GetFirstChildDiffPosition(entry.parent);
+		while (pos != nullptr)
+		{
+			DIFFITEM &di = pCtxt->GetNextSiblingDiffRefPosition(pos);
+			if (!di.diffcode.isDirectory())
+			{
+				pCtxt->m_pCompareStats->BeginCompare(&di, 0);
+				CompareDiffItem(fc, di);
+			}
+		}
+
+		// Enqueue subdirectories found at this level for further BFS expansion
+		pos = pCtxt->GetFirstChildDiffPosition(entry.parent);
+		while (pos != nullptr)
+		{
+			DIFFITEM *dirPtr = pos;
+			DIFFITEM &di = pCtxt->GetNextSiblingDiffRefPosition(pos);
+			if (di.diffcode.isDirectory() &&
+				(di.diffcode.diffcode & DIFFCODE::SKIPPED) == 0 &&
+				(di.diffcode.existAll() || bUniques))
+			{
+				BFSEntry childEntry;
+				childEntry.parent = dirPtr;
+				int nDirs = pCtxt->GetCompareDirs();
+				for (int side = 0; side < nDirs; side++)
+				{
+					String p = di.diffFileInfo[side].path.get();
+					String fn = di.diffFileInfo[side].filename.get();
+					if (p.empty())
+						childEntry.subdir[side] = fn;
+					else
+						childEntry.subdir[side] = p + _T("\\") + fn;
+				}
+				bfsQueue.push(std::move(childEntry));
+			}
+		}
+
+		// Fire progress event after each folder scan, throttled by 500ms
+		// to avoid overwhelming the UI with redraws
+		if (stopwatch.elapsed() > 500000) // every 500ms
+		{
+			int event = CDiffThread::EVENT_COMPARE_PROGRESSED;
+			myStruct->m_listeners.notify(myStruct, event);
+			stopwatch.restart();
+		}
+	}
+
+	// Clear active scan indicator
+	pCtxt->m_pActiveScanParent.store(nullptr, std::memory_order_relaxed);
+
+	// Propagate directory DIFF/SAME status from leaves to root
+	PropagateDirStatus(pCtxt, nullptr);
+
+	// Fire final progress event
+	int event = CDiffThread::EVENT_COMPARE_PROGRESSED;
+	myStruct->m_listeners.notify(myStruct, event);
 }

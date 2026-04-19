@@ -21,12 +21,20 @@
 #define new DEBUG_NEW
 #endif
 
-// Beyond Compare dark theme colors for toolbar
+// Detect whether the system is using a dark window background
+static bool IsSystemDarkMode()
+{
+	COLORREF bg = ::GetSysColor(COLOR_WINDOW);
+	int luminance = (GetRValue(bg) * 299 + GetGValue(bg) * 587 + GetBValue(bg) * 114) / 1000;
+	return luminance < 128;
+}
+
+// Theme-aware colors for toolbar
 namespace BcToolbarColors
 {
-	static const COLORREF BG       = RGB(45, 48, 50);
-	static const COLORREF TEXT     = RGB(200, 200, 200);
-	static const COLORREF BORDER   = RGB(70, 75, 75);
+	static COLORREF BG()     { return IsSystemDarkMode() ? RGB(45, 48, 50) : ::GetSysColor(COLOR_BTNFACE); }
+	static COLORREF FG_TEXT()   { return IsSystemDarkMode() ? RGB(200, 200, 200) : ::GetSysColor(COLOR_BTNTEXT); }
+	static COLORREF BORDER() { return IsSystemDarkMode() ? RGB(70, 75, 75) : ::GetSysColor(COLOR_BTNSHADOW); }
 }
 
 IMPLEMENT_DYNAMIC(CDirSxSToolBar, CToolBar)
@@ -103,7 +111,7 @@ BOOL CDirSxSToolBar::OnEraseBkgnd(CDC* pDC)
 {
 	CRect rc;
 	GetClientRect(&rc);
-	pDC->FillSolidRect(&rc, BcToolbarColors::BG);
+	pDC->FillSolidRect(&rc, BcToolbarColors::BG());
 	return TRUE;
 }
 
@@ -124,9 +132,15 @@ void CDirSxSToolBar::OnCustomDraw(NMHDR* pNMHDR, LRESULT* pResult)
 		bool bHot = (lpTBCD->nmcd.uItemState & CDIS_HOT) != 0;
 		bool bSelected = (lpTBCD->nmcd.uItemState & CDIS_SELECTED) != 0;
 
-		// Draw button background manually for proper dark theme
-		COLORREF clrBg = bSelected ? RGB(35, 38, 40) :
-			(bHot ? RGB(65, 70, 72) : BcToolbarColors::BG);
+		// Draw button background manually — theme-aware
+		bool bDark = IsSystemDarkMode();
+		COLORREF clrBg;
+		if (bSelected)
+			clrBg = bDark ? RGB(35, 38, 40) : ::GetSysColor(COLOR_BTNSHADOW);
+		else if (bHot)
+			clrBg = bDark ? RGB(65, 70, 72) : ::GetSysColor(COLOR_BTNHIGHLIGHT);
+		else
+			clrBg = BcToolbarColors::BG();
 		HBRUSH hBrush = CreateSolidBrush(clrBg);
 		FillRect(hDC, &rc, hBrush);
 		DeleteObject(hBrush);
@@ -134,7 +148,7 @@ void CDirSxSToolBar::OnCustomDraw(NMHDR* pNMHDR, LRESULT* pResult)
 		// Draw subtle border on hover/pressed
 		if (bHot || bSelected)
 		{
-			HPEN hPen = CreatePen(PS_SOLID, 1, BcToolbarColors::BORDER);
+			HPEN hPen = CreatePen(PS_SOLID, 1, BcToolbarColors::BORDER());
 			HPEN hOldPen = (HPEN)SelectObject(hDC, hPen);
 			HBRUSH hNull = (HBRUSH)GetStockObject(NULL_BRUSH);
 			HBRUSH hOldBr = (HBRUSH)SelectObject(hDC, hNull);
@@ -144,9 +158,9 @@ void CDirSxSToolBar::OnCustomDraw(NMHDR* pNMHDR, LRESULT* pResult)
 			DeleteObject(hPen);
 		}
 
-		lpTBCD->clrText = BcToolbarColors::TEXT;
-		lpTBCD->clrBtnFace = BcToolbarColors::BG;
-		lpTBCD->clrBtnHighlight = RGB(60, 65, 68);
+		lpTBCD->clrText = BcToolbarColors::FG_TEXT();
+		lpTBCD->clrBtnFace = BcToolbarColors::BG();
+		lpTBCD->clrBtnHighlight = bDark ? RGB(60, 65, 68) : ::GetSysColor(COLOR_BTNHIGHLIGHT);
 		*pResult = TBCDRF_USECDCOLORS | TBCDRF_NOBACKGROUND;
 		return;
 	}
@@ -176,7 +190,7 @@ HBITMAP CDirSxSToolBar::CreateIcon16(int iconType)
 	HBITMAP hOldBmp = (HBITMAP)SelectObject(hMemDC, hBmp);
 
 	// Fill with dark bg (transparent key)
-	COLORREF clrTransparent = BcToolbarColors::BG;
+	COLORREF clrTransparent = BcToolbarColors::BG();
 	HBRUSH hBrush = CreateSolidBrush(clrTransparent);
 	RECT rcFull = { 0, 0, sz, sz };
 	FillRect(hMemDC, &rcFull, hBrush);
@@ -361,17 +375,17 @@ HBITMAP CDirSxSToolBar::CreateIcon16(int iconType)
 			FillBox(7, 13, 3, 2, c);
 		}
 		break;
-	case ICON_SWAP: // Two bidirectional arrows: yellow
+	case ICON_SWAP: // Two bidirectional arrows: light blue-gray
 		{
-			COLORREF c = RGB(220, 200, 50);
-			// Left arrow
-			FillBox(1, 4, 10, 2, c);
-			DrawLine(1, 5, 4, 2, c);
-			DrawLine(1, 5, 4, 8, c);
-			// Right arrow
-			FillBox(5, 10, 10, 2, c);
-			DrawLine(15, 11, 12, 8, c);
-			DrawLine(15, 11, 12, 14, c);
+			COLORREF c = RGB(200, 200, 220);
+			// Right-pointing arrow (top half)
+			FillBox(3, 3, 9, 2, c);
+			DrawLine(12, 4, 9, 1, c);
+			DrawLine(12, 4, 9, 7, c);
+			// Left-pointing arrow (bottom half)
+			FillBox(4, 11, 9, 2, c);
+			DrawLine(4, 12, 7, 9, c);
+			DrawLine(4, 12, 7, 15, c);
 		}
 		break;
 	case ICON_STOP: // Red X in circle
@@ -412,7 +426,7 @@ void CDirSxSToolBar::CreateToolbarIcons()
 	{
 		CBitmap bmp;
 		bmp.Attach(CreateIcon16(i));
-		m_imageList.Add(&bmp, BcToolbarColors::BG);
+		m_imageList.Add(&bmp, BcToolbarColors::BG());
 	}
 }
 
@@ -424,7 +438,7 @@ BOOL CDirSxSToolBar::Create(CWnd* pParentWnd)
 	if (!CToolBar::CreateEx(pParentWnd,
 		TBSTYLE_FLAT | TBSTYLE_TOOLTIPS,
 		WS_CHILD | CBRS_TOP | CBRS_TOOLTIPS | CBRS_FLYBY,
-		CRect(0, 0, 0, 0), AFX_IDW_CONTROLBAR_FIRST + 29))
+		CRect(0, 0, 0, 0), AFX_IDW_CONTROLBAR_FIRST + 31))
 	{
 		return FALSE;
 	}
@@ -462,14 +476,31 @@ BOOL CDirSxSToolBar::Create(CWnd* pParentWnd)
 
 	GetToolBarCtrl().AddButtons(NUM_BUTTONS, tbButtons);
 
-	// Set button + bitmap sizes for icon-beside-text layout (BC style: 20x20 icons, ~55px wide)
+	// Set button + bitmap sizes for icon-beside-text layout (BC style: 20x20 icons)
 	GetToolBarCtrl().SetBitmapSize(CSize(20, 20));
-	GetToolBarCtrl().SetButtonSize(CSize(55, 38));
+	GetToolBarCtrl().SetButtonSize(CSize(68, 38));
+
+	// Enable TBSTYLE_AUTOSIZE on each non-separator button so the toolbar
+	// auto-sizes buttons to fit their text+icon width (prevents truncation)
+	for (int i = 0; i < NUM_BUTTONS; i++)
+	{
+		if (!(SxsButtons[i].fsStyle & TBSTYLE_SEP))
+		{
+			TBBUTTONINFO tbi = {};
+			tbi.cbSize = sizeof(tbi);
+			tbi.dwMask = TBIF_STYLE;
+			GetToolBarCtrl().GetButtonInfo(SxsButtons[i].nID, &tbi);
+			tbi.fsStyle |= TBSTYLE_AUTOSIZE;
+			GetToolBarCtrl().SetButtonInfo(SxsButtons[i].nID, &tbi);
+		}
+	}
 
 	SetBarStyle(GetBarStyle() & ~CBRS_BORDER_ANY);
 
-	// Disable visual styles so custom draw colors take full effect
-	SetWindowTheme(m_hWnd, L"", L"");
+	// In dark mode, disable visual styles so custom draw colors take full effect.
+	// In light mode, keep visual styles for native look.
+	if (IsSystemDarkMode())
+		SetWindowTheme(m_hWnd, L"", L"");
 
 	return TRUE;
 }

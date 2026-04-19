@@ -86,6 +86,27 @@ int FolderCmp::prepAndCompareFiles(DIFFITEM &di)
 
 	unsigned code = DIFFCODE::FILE | DIFFCODE::CMPERR;
 
+	// FAST PATH: metadata quick-check before ANY file I/O
+	// If timestamps AND sizes match on all sides, assume files are identical
+	// without reading content. This avoids codepage detection and file opens.
+	if (m_pCtxt->m_bTrustFileMetadata &&
+		(nCompMethod == CMP_CONTENT || nCompMethod == CMP_QUICK_CONTENT) &&
+		di.diffcode.existAll())
+	{
+		bool allMatch = true;
+		for (int idx = 1; idx < nDirs; idx++)
+		{
+			if (di.diffFileInfo[0].mtime != di.diffFileInfo[idx].mtime ||
+				di.diffFileInfo[0].size != di.diffFileInfo[idx].size)
+			{
+				allMatch = false;
+				break;
+			}
+		}
+		if (allMatch && di.diffFileInfo[0].size != DirItem::FILE_SIZE_NONE)
+			return DIFFCODE::FILE | DIFFCODE::SAME;
+	}
+
 	if (nCompMethod == CMP_CONTENT || nCompMethod == CMP_QUICK_CONTENT)
 	{
 		// Reset text stats
@@ -118,6 +139,12 @@ int FolderCmp::prepAndCompareFiles(DIFFITEM &di)
 	if (nCompMethod == CMP_CONTENT ||
 		nCompMethod == CMP_QUICK_CONTENT)
 	{
+		// Early exit for unique (single-side) files:
+		// No point detecting encoding or opening files when the result is always DIFF.
+		// Return directly to avoid codepage detection file I/O on orphan files.
+		if (!di.diffcode.existAll())
+			return DIFFCODE::FILE | DIFFCODE::DIFF;
+
 		PathContext tFiles;
 		m_pCtxt->GetComparePaths(di, tFiles);
 		struct change *script10 = nullptr;
@@ -129,7 +156,7 @@ int FolderCmp::prepAndCompareFiles(DIFFITEM &di)
 		int codepage = 0;
 
 		// For user chosen plugins, define bAutomaticUnpacker as false and use the chosen infoHandler
-		// but how can we receive the infoHandler ? DirScan actually only 
+		// but how can we receive the infoHandler ? DirScan actually only
 		// returns info, but can not use file dependent information.
 
 		// Transformation happens here
@@ -176,43 +203,6 @@ int FolderCmp::prepAndCompareFiles(DIFFITEM &di)
 		// Invoke prediff'ing plugins
 			if (infoPrediffer && !m_diffFileData.Filepath_Transform(nIndex, bForceUTF8, encoding[nIndex], filepathUnpacked[nIndex], filepathTransformed[nIndex], filteredFilenames, *infoPrediffer))
 				goto exitPrepAndCompare;
-		}
-
-		// Early exit for unique (single-side) files:
-		// Encoding has been detected above, but there's no point opening files
-		// and running a full comparison when the result will always be DIFF.
-		if (!di.diffcode.existAll())
-		{
-			code = DIFFCODE::FILE | DIFFCODE::DIFF;
-			m_ndiffs = CDiffContext::DIFFS_UNKNOWN;
-			m_ntrivialdiffs = CDiffContext::DIFFS_UNKNOWN;
-			goto exitPrepAndCompare;
-		}
-
-		// Metadata quick-check: if timestamps AND sizes match on all sides,
-		// assume files are identical without reading content.
-		// This is the single biggest performance optimization for large folder
-		// comparisons. Beyond Compare uses this approach by default.
-		if (m_pCtxt->m_bTrustFileMetadata)
-		{
-			bool allMetadataMatch = true;
-			for (int idx = 1; idx < nDirs; idx++)
-			{
-				if (di.diffFileInfo[0].mtime != di.diffFileInfo[idx].mtime ||
-					di.diffFileInfo[0].size != di.diffFileInfo[idx].size)
-				{
-					allMetadataMatch = false;
-					break;
-				}
-			}
-			if (allMetadataMatch &&
-				di.diffFileInfo[0].size != DirItem::FILE_SIZE_NONE)
-			{
-				code = DIFFCODE::FILE | DIFFCODE::SAME;
-				m_ndiffs = 0;
-				m_ntrivialdiffs = 0;
-				goto exitPrepAndCompare;
-			}
 		}
 
 		// If either file is larger than limit compare files by quick contents

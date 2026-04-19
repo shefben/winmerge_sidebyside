@@ -18,9 +18,11 @@
 #include "DirSxSToolBar.h"
 #include "DirPaneView.h"
 #include "DirGutterView.h"
+#include "DirSxSUnifiedView.h"
 #include "DirSideBySideCoordinator.h"
 #include "DirDoc.h"
 #include "DiffContext.h"
+#include "CompareStats.h"
 #include "OptionsDef.h"
 #include "OptionsMgr.h"
 #include "OptionsDirColors.h"
@@ -39,7 +41,8 @@
  */
 enum
 {
-	PANE_FILTER = 1,
+	PANE_SXS_PROGRESS = 1,
+	PANE_FILTER,
 	PANE_COMPMETHOD,
 	PANE_LEFT_RO,
 	PANE_MIDDLE_RO,
@@ -68,6 +71,7 @@ const int FILTER_PANEL_WIDTH = 200;
 static UINT indicators[] =
 {
 	ID_SEPARATOR,           // status line indicator
+	ID_SEPARATOR,           // progress bar pane (SxS mode)
 	ID_SEPARATOR,
 	ID_SEPARATOR,
 	ID_SEPARATOR,
@@ -92,6 +96,8 @@ CDirFrame::CDirFrame()
 , m_pLeftPaneView(nullptr)
 , m_pRightPaneView(nullptr)
 , m_pGutterView(nullptr)
+, m_pUnifiedView(nullptr)
+, m_rcLastClient(0, 0, 0, 0)
 {
 }
 
@@ -125,9 +131,13 @@ BEGIN_MESSAGE_MAP(CDirFrame, CMergeFrameCommon)
 	ON_COMMAND(ID_DIR_SXS_NAV_FORWARD, OnSxsNavForward)
 	ON_UPDATE_COMMAND_UI(ID_DIR_SXS_NAV_BACK, OnUpdateSxsNavBack)
 	ON_UPDATE_COMMAND_UI(ID_DIR_SXS_NAV_FORWARD, OnUpdateSxsNavForward)
+	ON_WM_MDIACTIVATE()
 	ON_COMMAND(ID_DIR_SXS_UP_LEVEL, OnSxsUpLevel)
 	ON_UPDATE_COMMAND_UI_RANGE(ID_DIR_SXS_HOME, ID_DIR_SXS_STRUCTURE, OnUpdateSxsRange)
-	ON_UPDATE_COMMAND_UI_RANGE(ID_DIR_SXS_SHOW_MINOR, ID_DIR_SXS_STOP, OnUpdateSxsRange)
+	ON_COMMAND(ID_DIR_SXS_STOP, OnSxsStop)
+	ON_UPDATE_COMMAND_UI(ID_DIR_SXS_STOP, OnUpdateSxsStop)
+	ON_UPDATE_COMMAND_UI(ID_DIR_SXS_SHOW_MINOR, OnUpdateSxsRange)
+	ON_UPDATE_COMMAND_UI(ID_DIR_SXS_FILES_BUTTON, OnUpdateSxsRange)
 	ON_UPDATE_COMMAND_UI_RANGE(ID_DIR_SXS_STRUCT_ALWAYS_FOLDERS, ID_DIR_SXS_DIFFS_RIGHT_ORPHANS, OnUpdateSxsRange)
 	ON_UPDATE_COMMAND_UI(ID_DIR_SXS_FILTER_ALL, OnUpdateSxsRange)
 	ON_UPDATE_COMMAND_UI(ID_DIR_SXS_FILTER_IDENTICAL, OnUpdateSxsRange)
@@ -154,6 +164,8 @@ BEGIN_MESSAGE_MAP(CDirFrame, CMergeFrameCommon)
 	ON_COMMAND(ID_DIR_SXS_STRUCT_IGNORE_STRUCTURE, OnSxsStructIgnoreStructure)
 	ON_COMMAND(ID_DIR_SXS_SESSION_SETTINGS, OnSxsSessionSettings)
 	ON_COMMAND(ID_DIR_SXS_HOME, OnSxsHome)
+	ON_COMMAND(ID_DIR_SXS_SHOW_MINOR, OnSxsShowMinor)
+	ON_COMMAND(ID_DIR_SXS_FILES_BUTTON, OnSxsFilesButton)
 	// Forward standard WinMerge commands to active SxS pane
 	ON_COMMAND(ID_DIR_COPY_LEFT_TO_RIGHT, OnFwdCopyLR)
 	ON_COMMAND(ID_DIR_COPY_RIGHT_TO_LEFT, OnFwdCopyRL)
@@ -185,22 +197,9 @@ int CDirFrame::OnCreate(LPCREATESTRUCT lpCreateStruct)
 		return -1;      // fail to create
 	}
 
-	// Create the side-by-side header bar (initially hidden; shown when SxS mode is active)
-	if (!m_wndSxSHeaderBar.Create(this))
-	{
-		TRACE0("Failed to create SxS header bar\n");
-		return -1;      // fail to create
-	}
+	// Create SxS bars in stacking order: toolbar (top) → filter bar → header bar (bottom)
+	// MFC stacks CBRS_TOP bars based on creation + show order.
 
-	// Create the side-by-side filter bar (initially hidden; shown when SxS mode is active)
-	if (!m_wndSxSFilterBar.Create(this))
-	{
-		TRACE0("Failed to create SxS filter bar\n");
-		return -1;      // fail to create
-	}
-	ShowControlBar(&m_wndSxSFilterBar, FALSE, FALSE);
-
-	// Create the SxS toolbar (initially hidden; shown when SxS mode is active)
 	if (!m_wndSxSToolBar.Create(this))
 	{
 		TRACE0("Failed to create SxS toolbar\n");
@@ -208,15 +207,31 @@ int CDirFrame::OnCreate(LPCREATESTRUCT lpCreateStruct)
 	}
 	ShowControlBar(&m_wndSxSToolBar, FALSE, FALSE);
 
+	if (!m_wndSxSFilterBar.Create(this))
+	{
+		TRACE0("Failed to create SxS filter bar\n");
+		return -1;      // fail to create
+	}
+	ShowControlBar(&m_wndSxSFilterBar, FALSE, FALSE);
+
+	if (!m_wndSxSHeaderBar.Create(this))
+	{
+		TRACE0("Failed to create SxS header bar\n");
+		return -1;      // fail to create
+	}
+
 	// Now that all bars are created, apply deferred SxS visibility
 	// (OnCreateClient ran before these bars existed, so ShowControlBar was skipped)
 	if (m_bSideBySideMode)
 	{
 		ShowControlBar(&m_wndFilePathBar, FALSE, FALSE);
+		m_wndFilePathBar.ShowWindow(SW_HIDE);
+		// Show in order: toolbar (top) → filter bar → header bar (bottom, closest to content)
 		ShowControlBar(&m_wndSxSToolBar, TRUE, FALSE);
-		ShowControlBar(&m_wndSxSHeaderBar, TRUE, FALSE);
 		if (GetOptionsMgr()->GetBool(OPT_DIRVIEW_SXS_SHOW_FILTER_BAR))
 			ShowControlBar(&m_wndSxSFilterBar, TRUE, FALSE);
+		ShowControlBar(&m_wndSxSHeaderBar, TRUE, FALSE);
+		m_wndSxSHeaderBar.Resize();
 	}
 	else
 	{
@@ -236,6 +251,7 @@ int CDirFrame::OnCreate(LPCREATESTRUCT lpCreateStruct)
 	const int lpx = CClientDC(this).GetDeviceCaps(LOGPIXELSX);
 	auto pointToPixel = [lpx](int point) { return MulDiv(point, lpx, 72); };
 	m_wndStatusBar.SetPaneInfo(0, 0, SBPS_STRETCH | SBPS_NOBORDERS, 0);
+	m_wndStatusBar.SetPaneInfo(PANE_SXS_PROGRESS, ID_SEPARATOR, SBPS_NOBORDERS, pointToPixel(150));
 	m_wndStatusBar.SetPaneInfo(PANE_FILTER, ID_STATUS_FILTER, SBPS_CLICKABLE, pointToPixel(FILTER_PANEL_WIDTH));
 	m_wndStatusBar.SetPaneInfo(PANE_COMPMETHOD, ID_STATUS_FILTER, SBPS_CLICKABLE, pointToPixel(COMPMETHOD_PANEL_WIDTH));
 	m_wndStatusBar.SetPaneInfo(PANE_LEFT_RO, ID_STATUS_LEFTDIR_RO, SBPS_CLICKABLE, pointToPixel(RO_PANEL_WIDTH));
@@ -244,6 +260,15 @@ int CDirFrame::OnCreate(LPCREATESTRUCT lpCreateStruct)
 	m_wndStatusBar.SetPaneText(PANE_LEFT_RO, sText.c_str(), TRUE); 
 	m_wndStatusBar.SetPaneText(PANE_MIDDLE_RO, sText.c_str(), TRUE); 
 	m_wndStatusBar.SetPaneText(PANE_RIGHT_RO, sText.c_str(), TRUE);
+
+	// Create log panel (bottom, visible in SxS mode)
+	// Note: ShowControlBar is deferred to OnCreateClient when m_bSideBySideMode is known.
+	if (!m_wndLogPanel.Create(this))
+	{
+		TRACE0("Failed to create log panel\n");
+		return -1;
+	}
+	ShowControlBar(&m_wndLogPanel, FALSE, FALSE);
 
 	// load docking positions and sizes
 	CDockState dockState;
@@ -282,9 +307,18 @@ void CDirFrame::SetFilterStatusDisplay(const tchar_t* szFilter)
 /**
  * @brief Restore maximized state of directory compare window
  */
-void CDirFrame::ActivateFrame(int nCmdShow) 
+void CDirFrame::ActivateFrame(int nCmdShow)
 {
 	__super::ActivateFrame(nCmdShow);
+
+	// Hide the native WinMerge toolbar when SxS mode is active
+	// (the SxS toolbar replaces it)
+	if (m_bSideBySideMode)
+	{
+		CToolBar* pMainToolbar = GetMainFrame()->GetToolbar();
+		if (pMainToolbar && pMainToolbar->GetSafeHwnd() && pMainToolbar->IsWindowVisible())
+			GetMainFrame()->ShowControlBar(pMainToolbar, FALSE, FALSE);
+	}
 }
 
 /**
@@ -315,13 +349,15 @@ BOOL CDirFrame::DestroyWindow()
 	// Save SxS state
 	if (m_bSideBySideMode)
 	{
+		if (m_pUnifiedView)
+			m_pUnifiedView->SaveColumnState();
 		if (m_pLeftPaneView)
 			m_pLeftPaneView->SaveColumnState();
 		if (m_pRightPaneView)
 			m_pRightPaneView->SaveColumnState();
 
-		// Save splitter position
-		if (::IsWindow(m_wndSplitter.m_hWnd))
+		// Save splitter position (only in split-pane mode)
+		if (m_bSplitterCreated && ::IsWindow(m_wndSplitter.m_hWnd))
 		{
 			int wLeft, wMin;
 			m_wndSplitter.GetColumnInfo(0, wLeft, wMin);
@@ -329,10 +365,8 @@ BOOL CDirFrame::DestroyWindow()
 		}
 
 		// Clear coordinator pointers BEFORE child windows are destroyed.
-		// __super::DestroyWindow() will destroy the CDirPaneView instances
-		// (CView::PostNcDestroy → delete this), leaving raw pointers dangling.
-		// The CDirDoc also holds a raw pointer to the coordinator — clear it
-		// so the DiffThread callback and other code paths don't dereference freed memory.
+		if (m_pUnifiedView)
+			m_pUnifiedView->SetCoordinator(nullptr);
 		if (m_pLeftPaneView)
 			m_pLeftPaneView->SetCoordinator(nullptr);
 		if (m_pRightPaneView)
@@ -378,6 +412,86 @@ void CDirFrame::HideProgressBar()
 		m_pCmpProgressBar->DestroyWindow();
 	}
 	m_pCmpProgressBar.reset();
+}
+
+void CDirFrame::ShowScanProgressBar(bool bMarquee /*= false*/)
+{
+	if (!m_bSideBySideMode)
+		return;
+	if (::IsWindow(m_wndScanProgress.GetSafeHwnd()))
+		return; // Already shown
+
+	CRect rcPane;
+	m_wndStatusBar.GetItemRect(PANE_SXS_PROGRESS, &rcPane);
+	// Ensure minimum size even if status bar hasn't laid out yet
+	if (rcPane.Width() < 50)
+		rcPane.right = rcPane.left + 200;
+
+	DWORD dwStyle = WS_CHILD | WS_VISIBLE | PBS_SMOOTH;
+	if (bMarquee)
+		dwStyle |= PBS_MARQUEE;
+
+	m_wndScanProgress.Create(dwStyle,
+		rcPane, &m_wndStatusBar, IDC_SXS_SCAN_PROGRESS);
+	m_wndScanProgress.SetBarColor(RGB(70, 130, 220));
+
+	if (bMarquee)
+	{
+		m_wndScanProgress.SendMessage(PBM_SETMARQUEE, TRUE, 30);
+	}
+	else
+	{
+		m_wndScanProgress.SetRange32(0, 100);
+		m_wndScanProgress.SetPos(0);
+	}
+}
+
+void CDirFrame::HideScanProgressBar()
+{
+	if (::IsWindow(m_wndScanProgress.GetSafeHwnd()))
+	{
+		m_wndScanProgress.DestroyWindow();
+	}
+}
+
+void CDirFrame::SetScanProgressDeterminate()
+{
+	if (!::IsWindow(m_wndScanProgress.GetSafeHwnd()))
+		return;
+
+	// Stop marquee animation and switch to determinate mode
+	m_wndScanProgress.SendMessage(PBM_SETMARQUEE, FALSE, 0);
+	m_wndScanProgress.ModifyStyle(PBS_MARQUEE, 0);
+	m_wndScanProgress.SetRange32(0, 100);
+	m_wndScanProgress.SetPos(0);
+}
+
+void CDirFrame::UpdateScanProgressBar()
+{
+	if (!::IsWindow(m_wndScanProgress.GetSafeHwnd()))
+		return;
+
+	// Reposition to match current progress pane rect
+	CRect rcPane;
+	m_wndStatusBar.GetItemRect(PANE_SXS_PROGRESS, &rcPane);
+	m_wndScanProgress.MoveWindow(&rcPane);
+
+	// Update range/position from CompareStats
+	CDirDoc *pDoc = dynamic_cast<CDirDoc*>(GetActiveDocument());
+	if (pDoc && pDoc->HasDiffs())
+	{
+		const CDiffContext &ctxt = pDoc->GetDiffContext();
+		if (ctxt.m_pCompareStats)
+		{
+			int nTotal = ctxt.m_pCompareStats->GetTotalItems();
+			int nDone = ctxt.m_pCompareStats->GetComparedItems();
+			if (nTotal > 0)
+			{
+				m_wndScanProgress.SetRange32(0, nTotal);
+				m_wndScanProgress.SetPos(nDone);
+			}
+		}
+	}
 }
 
 void CDirFrame::OnViewDisplayFilterBar()
@@ -448,73 +562,34 @@ BOOL CDirFrame::OnCreateClient(LPCREATESTRUCT lpcs, CCreateContext* pContext)
 		return __super::OnCreateClient(lpcs, pContext);
 	}
 
-	// SxS mode: hide the standard header bar (path combos are now in each pane)
-	// Note: bars may not be created yet if OnCreateClient is called from __super::OnCreate
-	// before the bars are created in CDirFrame::OnCreate. Guard with IsWindow checks.
+	// SxS mode: hide the standard header bar
 	if (::IsWindow(m_wndFilePathBar.m_hWnd))
+	{
 		ShowControlBar(&m_wndFilePathBar, FALSE, FALSE);
+		m_wndFilePathBar.ShowWindow(SW_HIDE);
+	}
 	if (::IsWindow(m_wndSxSHeaderBar.m_hWnd))
 		ShowControlBar(&m_wndSxSHeaderBar, FALSE, FALSE);
 	if (::IsWindow(m_wndSxSFilterBar.m_hWnd) && GetOptionsMgr()->GetBool(OPT_DIRVIEW_SXS_SHOW_FILTER_BAR))
 		ShowControlBar(&m_wndSxSFilterBar, TRUE, FALSE);
 
-	bool bShowGutter = GetOptionsMgr()->GetBool(OPT_DIRVIEW_SXS_SHOW_GUTTER);
-	int nCols = bShowGutter ? 3 : 2;
-
-	// Create a 1-row, N-column splitter (2 panes + optional gutter)
-	m_wndSplitter.HideBorders(true);
-	if (!m_wndSplitter.CreateStatic(this, 1, nCols))
+	// Unified table mode: create a single CDirSxSUnifiedView instead of splitter+panes
+	pContext->m_pNewViewClass = RUNTIME_CLASS(CDirSxSUnifiedView);
+	if (!__super::OnCreateClient(lpcs, pContext))
 	{
-		TRACE0("Failed to create SxS splitter\n");
+		TRACE0("Failed to create unified view\n");
 		return FALSE;
 	}
 
-	// Create left pane (column 0)
-	if (!m_wndSplitter.CreateView(0, 0, RUNTIME_CLASS(CDirPaneView),
-		CSize(100, 100), pContext))
+	// GetActiveView() may not be set yet during OnCreateClient, so use
+	// the pane window ID that CFrameWnd::OnCreateClient assigns to the view.
+	CWnd* pWnd = GetDlgItem(AFX_IDW_PANE_FIRST);
+	m_pUnifiedView = DYNAMIC_DOWNCAST(CDirSxSUnifiedView, pWnd);
+	if (!m_pUnifiedView)
 	{
-		TRACE0("Failed to create left pane view\n");
+		TRACE0("Failed to get unified view from AFX_IDW_PANE_FIRST\n");
 		return FALSE;
 	}
-
-	if (bShowGutter)
-	{
-		// Create center gutter (column 1) — narrow, ~24px
-		if (!m_wndSplitter.CreateView(0, 1, RUNTIME_CLASS(CDirGutterView),
-			CSize(GetGutterColWidth(), 100), pContext))
-		{
-			TRACE0("Failed to create gutter view\n");
-			return FALSE;
-		}
-
-		// Create right pane (column 2)
-		if (!m_wndSplitter.CreateView(0, 2, RUNTIME_CLASS(CDirPaneView),
-			CSize(100, 100), pContext))
-		{
-			TRACE0("Failed to create right pane view\n");
-			return FALSE;
-		}
-
-		m_pLeftPaneView = static_cast<CDirPaneView*>(m_wndSplitter.GetPane(0, 0));
-		m_pGutterView = static_cast<CDirGutterView*>(m_wndSplitter.GetPane(0, 1));
-		m_pRightPaneView = static_cast<CDirPaneView*>(m_wndSplitter.GetPane(0, 2));
-	}
-	else
-	{
-		// Create right pane (column 1) — no gutter
-		if (!m_wndSplitter.CreateView(0, 1, RUNTIME_CLASS(CDirPaneView),
-			CSize(100, 100), pContext))
-		{
-			TRACE0("Failed to create right pane view\n");
-			return FALSE;
-		}
-
-		m_pLeftPaneView = static_cast<CDirPaneView*>(m_wndSplitter.GetPane(0, 0));
-		m_pRightPaneView = static_cast<CDirPaneView*>(m_wndSplitter.GetPane(0, 1));
-	}
-
-	m_pLeftPaneView->SetPaneIndex(0);
-	m_pRightPaneView->SetPaneIndex(1);
 
 	// Create the coordinator
 	CDirDoc *pDoc = dynamic_cast<CDirDoc*>(pContext->m_pCurrentDoc);
@@ -524,13 +599,8 @@ BOOL CDirFrame::OnCreateClient(LPCREATESTRUCT lpcs, CCreateContext* pContext)
 	GetOptionsMgr()->SaveOption(OPT_CMP_INCLUDE_SUBDIRS, true);
 
 	m_pCoordinator.reset(new CDirSideBySideCoordinator(pDoc));
-	m_pCoordinator->SetPaneViews(m_pLeftPaneView, m_pRightPaneView);
-
-	m_pLeftPaneView->SetCoordinator(m_pCoordinator.get());
-	m_pRightPaneView->SetCoordinator(m_pCoordinator.get());
-
-	if (m_pGutterView)
-		m_pGutterView->SetCoordinator(m_pCoordinator.get());
+	m_pCoordinator->SetUnifiedView(m_pUnifiedView);
+	m_pUnifiedView->SetCoordinator(m_pCoordinator.get());
 
 	// Connect coordinator to the document and filter bar
 	pDoc->SetSideBySideMode(true);
@@ -540,18 +610,21 @@ BOOL CDirFrame::OnCreateClient(LPCREATESTRUCT lpcs, CCreateContext* pContext)
 	// Wire the header bar callbacks
 	m_wndSxSHeaderBar.SetPaneCount(2);
 	m_wndSxSHeaderBar.SetOnBackCallback([this](int pane) {
-		OnSxsNavBack();
+		OnSxsNavBackSide(pane);
+	});
+	m_wndSxSHeaderBar.SetOnForwardCallback([this](int pane) {
+		OnSxsNavForwardSide(pane);
 	});
 	m_wndSxSHeaderBar.SetOnBrowseCallback([this](int pane) {
 		CFolderPickerDialog dlg(nullptr, 0, this);
 		if (dlg.DoModal() == IDOK)
 		{
 			String newPath(dlg.GetPathName().GetString());
-			CDirDoc* pDoc = dynamic_cast<CDirDoc*>(GetActiveDocument());
-			if (pDoc)
+			CDirDoc* pDoc2 = dynamic_cast<CDirDoc*>(GetActiveDocument());
+			if (pDoc2)
 			{
-				const CDiffContext& ctxt = pDoc->GetDiffContext();
-				m_pCoordinator->PushHistory(ctxt.GetLeftPath(), ctxt.GetRightPath());
+				const CDiffContext& ctxt = pDoc2->GetDiffContext();
+				m_pCoordinator->PushHistoryForSide(pane);
 				PathContext pathCtx;
 				if (pane == 0)
 				{
@@ -570,66 +643,19 @@ BOOL CDirFrame::OnCreateClient(LPCREATESTRUCT lpcs, CCreateContext* pContext)
 		}
 	});
 	m_wndSxSHeaderBar.SetOnUpLevelCallback([this](int pane) {
-		OnSxsUpLevel();
+		OnSxsUpLevelSide(pane);
+	});
+	m_wndSxSHeaderBar.SetOnUpBothCallback([this]() {
+		OnSxsUpLevelBoth();
 	});
 
-	// Set proper column widths: split available width between left and right panes,
-	// keeping gutter at fixed GetGutterColWidth().  Do NOT use EqualizeCols() because
-	// it distributes width equally across ALL columns including the gutter.
-	{
-		CRect rc;
-		GetClientRect(&rc);
-		int totalWidth = rc.Width();
-		if (totalWidth <= 0)
-			totalWidth = 800; // fallback if client rect not yet valid
+	m_bSplitterCreated = false; // No splitter in unified mode
 
-		int nSplitterPos = GetOptionsMgr()->GetInt(OPT_DIRVIEW_SXS_SPLITTER_POS);
+	// Show log panel now that m_bSideBySideMode is known
+	if (::IsWindow(m_wndLogPanel.m_hWnd))
+		ShowControlBar(&m_wndLogPanel, TRUE, FALSE);
 
-		if (bShowGutter)
-		{
-			int gutterW = GetGutterColWidth();
-			int paneSpace = totalWidth - gutterW;
-			if (paneSpace < 100) paneSpace = 100;
-
-			int leftW, rightW;
-			if (nSplitterPos > 0 && nSplitterPos < paneSpace - 50)
-			{
-				leftW = nSplitterPos;
-				rightW = paneSpace - leftW;
-			}
-			else
-			{
-				leftW = paneSpace / 2;
-				rightW = paneSpace - leftW;
-			}
-
-			m_wndSplitter.SetColumnInfo(0, leftW, 50);
-			m_wndSplitter.SetColumnInfo(1, gutterW, gutterW);
-			m_wndSplitter.SetColumnInfo(2, rightW, 50);
-		}
-		else
-		{
-			int leftW, rightW;
-			if (nSplitterPos > 0 && nSplitterPos < totalWidth - 50)
-			{
-				leftW = nSplitterPos;
-				rightW = totalWidth - leftW;
-			}
-			else
-			{
-				leftW = totalWidth / 2;
-				rightW = totalWidth - leftW;
-			}
-
-			m_wndSplitter.SetColumnInfo(0, leftW, 50);
-			m_wndSplitter.SetColumnInfo(1, rightW, 50);
-		}
-
-		m_wndSplitter.RecalcLayout();
-	}
-
-	m_bSplitterCreated = true;
-	TRACE(_T("CDirFrame::OnCreateClient — SxS splitter created OK, %d cols\n"), nCols);
+	TRACE(_T("CDirFrame::OnCreateClient — SxS unified view created OK\n"));
 	return TRUE;
 }
 
@@ -651,9 +677,35 @@ void CDirFrame::UpdateHeaderSizes()
 {
 	if (!m_bSideBySideMode)
 		return;
-	if (!m_bSplitterCreated)
+
+	// Unified view mode: split header bar based on unified list column positions
+	if (m_pUnifiedView && m_pUnifiedView->GetSafeHwnd())
+	{
+		CRect rcView;
+		m_pUnifiedView->GetClientRect(&rcView);
+		int totalW = rcView.Width();
+		if (totalW < 2) totalW = 800;
+
+		// Find the position of the right-side Name column (col 4) to split header
+		CHeaderCtrl* pHdr = m_pUnifiedView->GetListCtrl().GetHeaderCtrl();
+		int rightStart = totalW / 2;
+		if (pHdr && pHdr->GetItemCount() > CDirSxSUnifiedView::COL_RIGHT_NAME)
+		{
+			CRect rcCol;
+			pHdr->GetItemRect(CDirSxSUnifiedView::COL_RIGHT_NAME, &rcCol);
+			rightStart = rcCol.left;
+		}
+
+		int w[2] = { rightStart, totalW - rightStart };
+		int offsets[2] = { 0, rightStart };
+		if (w[0] < 1) w[0] = 1;
+		if (w[1] < 1) w[1] = 1;
+		m_wndSxSHeaderBar.Resize(w, offsets);
 		return;
-	if (!::IsWindow(m_wndSplitter.m_hWnd))
+	}
+
+	// Legacy split-pane mode
+	if (!m_bSplitterCreated || !::IsWindow(m_wndSplitter.m_hWnd))
 		return;
 
 	int nCols = m_wndSplitter.GetColumnCount();
@@ -662,15 +714,11 @@ void CDirFrame::UpdateHeaderSizes()
 
 	if (nCols == 3)
 	{
-		// 3-column: left pane (col 0), gutter (col 1), right pane (col 2)
 		int wmin, wGutter;
 		m_wndSplitter.GetColumnInfo(0, w[0], wmin);
 		m_wndSplitter.GetColumnInfo(1, wGutter, wmin);
 		m_wndSplitter.GetColumnInfo(2, w[1], wmin);
-		// Left pane starts at 0, right pane starts after left + gutter + splitter bars
 		offsets[0] = 0;
-		offsets[1] = w[0] + wGutter + m_wndSplitter.GetColumnCount(); // account for splitter borders
-		// Get actual right pane position from the splitter
 		CRect rcRight;
 		m_wndSplitter.GetPane(0, 2)->GetWindowRect(&rcRight);
 		CRect rcSplitter;
@@ -685,7 +733,6 @@ void CDirFrame::UpdateHeaderSizes()
 			m_wndSplitter.GetColumnInfo(pane, w[pane], wmin);
 		}
 		offsets[0] = 0;
-		// Get actual right pane position from the splitter
 		CRect rcRight;
 		m_wndSplitter.GetPane(0, 1)->GetWindowRect(&rcRight);
 		CRect rcSplitter;
@@ -696,18 +743,30 @@ void CDirFrame::UpdateHeaderSizes()
 	if (w[0] < 1) w[0] = 1;
 	if (w[1] < 1) w[1] = 1;
 
-	// Resize the header bar to match splitter column widths
 	m_wndSxSHeaderBar.Resize(w, offsets);
 
-	// Update the gutter display
 	if (m_pGutterView && m_pGutterView->GetSafeHwnd())
 		m_pGutterView->UpdateDisplay();
 }
 
 void CDirFrame::OnIdleUpdateCmdUI()
 {
+	// Let MFC update command UI for all control bars
+	// (required for stop button enable/disable, toolbar states, etc.)
+	CMergeFrameCommon::OnIdleUpdateCmdUI();
+
 	if (m_bSideBySideMode)
-		UpdateHeaderSizes();
+	{
+		// Only update header sizes when the client rect actually changed
+		// to prevent continuous Resize() calls that cause flicker.
+		CRect rc;
+		GetClientRect(&rc);
+		if (rc != m_rcLastClient)
+		{
+			m_rcLastClient = rc;
+			UpdateHeaderSizes();
+		}
+	}
 }
 
 void CDirFrame::OnViewSideBySide()
@@ -763,7 +822,9 @@ void CDirFrame::OnActivateApp(BOOL bActive, DWORD dwThreadID)
 		GetOptionsMgr()->GetBool(OPT_DIRVIEW_SXS_AUTO_REFRESH))
 	{
 		// Post refresh command to avoid issues during activation
-		if (m_pLeftPaneView && m_pLeftPaneView->GetSafeHwnd())
+		if (m_pUnifiedView && m_pUnifiedView->GetSafeHwnd())
+			m_pUnifiedView->PostMessage(WM_COMMAND, ID_DIR_SXS_REFRESH);
+		else if (m_pLeftPaneView && m_pLeftPaneView->GetSafeHwnd())
 			m_pLeftPaneView->PostMessage(WM_COMMAND, ID_DIR_SXS_REFRESH);
 	}
 }
@@ -1045,8 +1106,8 @@ void CDirFrame::OnSxsWorkspaceSave()
 	WritePrivateProfileString(_T("Workspace"), _T("WindowPlacement"),
 		sWinPos.c_str(), sPath.c_str());
 
-	// Splitter position
-	if (m_bSideBySideMode && ::IsWindow(m_wndSplitter.m_hWnd))
+	// Splitter position (legacy split mode only)
+	if (m_bSideBySideMode && m_bSplitterCreated && ::IsWindow(m_wndSplitter.m_hWnd))
 	{
 		int wLeft, wMin;
 		m_wndSplitter.GetColumnInfo(0, wLeft, wMin);
@@ -1056,6 +1117,10 @@ void CDirFrame::OnSxsWorkspaceSave()
 	}
 
 	// Column widths
+	if (m_pUnifiedView)
+	{
+		m_pUnifiedView->SaveColumnState();
+	}
 	if (m_pLeftPaneView)
 	{
 		m_pLeftPaneView->SaveColumnState();
@@ -1166,6 +1231,29 @@ void CDirFrame::OnSxsWorkspaceLoad()
 			wp.showCmd = sc;
 			SetWindowPlacement(&wp);
 		}
+	}
+}
+
+/**
+ * @brief Handle MDI child activation — restore native toolbar when leaving SxS frame.
+ */
+void CDirFrame::OnMDIActivate(BOOL bActivate, CWnd* pActivateWnd, CWnd* pDeactivateWnd)
+{
+	__super::OnMDIActivate(bActivate, pActivateWnd, pDeactivateWnd);
+
+	if (!bActivate && m_bSideBySideMode)
+	{
+		// Restore native toolbar when deactivating SxS frame
+		CToolBar* pMainToolbar = GetMainFrame()->GetToolbar();
+		if (pMainToolbar && pMainToolbar->GetSafeHwnd() && !pMainToolbar->IsWindowVisible())
+			GetMainFrame()->ShowControlBar(pMainToolbar, TRUE, FALSE);
+	}
+	else if (bActivate && m_bSideBySideMode)
+	{
+		// Hide native toolbar when re-activating SxS frame
+		CToolBar* pMainToolbar = GetMainFrame()->GetToolbar();
+		if (pMainToolbar && pMainToolbar->GetSafeHwnd() && pMainToolbar->IsWindowVisible())
+			GetMainFrame()->ShowControlBar(pMainToolbar, FALSE, FALSE);
 	}
 }
 
@@ -1372,57 +1460,216 @@ void CDirFrame::OnSxsHome()
 	GetMainFrame()->PostMessage(WM_COMMAND, ID_FILE_OPEN);
 }
 
+// --- Stop button ---
+void CDirFrame::OnSxsStop()
+{
+	CDirDoc* pDoc = dynamic_cast<CDirDoc*>(GetActiveDocument());
+	if (pDoc)
+		pDoc->AbortCurrentScan();
+}
+
+void CDirFrame::OnUpdateSxsStop(CCmdUI* pCmdUI)
+{
+	CDirDoc* pDoc = dynamic_cast<CDirDoc*>(GetActiveDocument());
+	pCmdUI->Enable(m_bSideBySideMode && pDoc && pDoc->IsCurrentScanAbortable());
+}
+
+// --- Minor button: toggle display of skipped/filtered items ---
+void CDirFrame::OnSxsShowMinor()
+{
+	bool bCurrent = GetOptionsMgr()->GetBool(OPT_SHOW_SKIPPED);
+	GetOptionsMgr()->SaveOption(OPT_SHOW_SKIPPED, !bCurrent);
+	if (m_pCoordinator)
+		m_pCoordinator->Redisplay();
+}
+
+// --- Files button: open selected files for comparison ---
+void CDirFrame::OnSxsFilesButton()
+{
+	if (!m_bSideBySideMode)
+		return;
+
+	if (m_pUnifiedView && m_pUnifiedView->GetSafeHwnd())
+	{
+		m_pUnifiedView->SendMessage(WM_COMMAND, ID_DIR_SXS_OPEN_COMPARE);
+		return;
+	}
+
+	// Legacy split-pane mode
+	CDirPaneView* pPane = m_pLeftPaneView;
+	if (m_pRightPaneView && m_pRightPaneView == GetFocus())
+		pPane = m_pRightPaneView;
+	if (pPane)
+		pPane->SendMessage(WM_COMMAND, ID_DIR_SXS_OPEN_COMPARE);
+}
+
 // --- Forward standard WinMerge commands to the active SxS pane ---
 
 void CDirFrame::OnFwdCopyLR()
 {
-	if (m_bSideBySideMode && m_pLeftPaneView)
-		m_pLeftPaneView->SendMessage(WM_COMMAND, ID_DIR_SXS_COPY);
+	if (!m_bSideBySideMode) return;
+	CWnd* pTarget = m_pUnifiedView ? static_cast<CWnd*>(m_pUnifiedView) : static_cast<CWnd*>(m_pLeftPaneView);
+	if (pTarget) pTarget->SendMessage(WM_COMMAND, ID_DIR_SXS_COPY);
 }
 
 void CDirFrame::OnFwdCopyRL()
 {
-	if (m_bSideBySideMode && m_pRightPaneView)
-		m_pRightPaneView->SendMessage(WM_COMMAND, ID_DIR_SXS_COPY);
+	if (!m_bSideBySideMode) return;
+	CWnd* pTarget = m_pUnifiedView ? static_cast<CWnd*>(m_pUnifiedView) : static_cast<CWnd*>(m_pRightPaneView);
+	if (pTarget) pTarget->SendMessage(WM_COMMAND, ID_DIR_SXS_COPY);
 }
 
 void CDirFrame::OnFwdDelLeft()
 {
-	if (m_bSideBySideMode && m_pLeftPaneView)
-		m_pLeftPaneView->SendMessage(WM_COMMAND, ID_DIR_SXS_DELETE);
+	if (!m_bSideBySideMode) return;
+	CWnd* pTarget = m_pUnifiedView ? static_cast<CWnd*>(m_pUnifiedView) : static_cast<CWnd*>(m_pLeftPaneView);
+	if (pTarget) pTarget->SendMessage(WM_COMMAND, ID_DIR_SXS_DELETE);
 }
 
 void CDirFrame::OnFwdDelRight()
 {
-	if (m_bSideBySideMode && m_pRightPaneView)
-		m_pRightPaneView->SendMessage(WM_COMMAND, ID_DIR_SXS_DELETE);
+	if (!m_bSideBySideMode) return;
+	CWnd* pTarget = m_pUnifiedView ? static_cast<CWnd*>(m_pUnifiedView) : static_cast<CWnd*>(m_pRightPaneView);
+	if (pTarget) pTarget->SendMessage(WM_COMMAND, ID_DIR_SXS_DELETE);
 }
 
 void CDirFrame::OnFwdDelBoth()
 {
-	if (m_bSideBySideMode)
-	{
-		if (m_pLeftPaneView)
-			m_pLeftPaneView->SendMessage(WM_COMMAND, ID_DIR_SXS_DELETE);
-		if (m_pRightPaneView)
-			m_pRightPaneView->SendMessage(WM_COMMAND, ID_DIR_SXS_DELETE);
-	}
+	if (!m_bSideBySideMode) return;
+	CWnd* pTarget = m_pUnifiedView ? static_cast<CWnd*>(m_pUnifiedView) : static_cast<CWnd*>(m_pLeftPaneView);
+	if (pTarget) pTarget->SendMessage(WM_COMMAND, ID_DIR_SXS_DELETE);
 }
 
 void CDirFrame::OnFwdRefresh()
 {
-	if (m_bSideBySideMode && m_pLeftPaneView)
-		m_pLeftPaneView->SendMessage(WM_COMMAND, ID_DIR_SXS_REFRESH);
+	if (!m_bSideBySideMode) return;
+	CWnd* pTarget = m_pUnifiedView ? static_cast<CWnd*>(m_pUnifiedView) : static_cast<CWnd*>(m_pLeftPaneView);
+	if (pTarget) pTarget->SendMessage(WM_COMMAND, ID_DIR_SXS_REFRESH);
 }
 
 void CDirFrame::OnFwdSelectAll()
 {
-	if (m_bSideBySideMode && m_pLeftPaneView)
-		m_pLeftPaneView->SendMessage(WM_COMMAND, ID_DIR_SXS_SELECT_ALL);
+	if (!m_bSideBySideMode) return;
+	CWnd* pTarget = m_pUnifiedView ? static_cast<CWnd*>(m_pUnifiedView) : static_cast<CWnd*>(m_pLeftPaneView);
+	if (pTarget) pTarget->SendMessage(WM_COMMAND, ID_DIR_SXS_SELECT_ALL);
 }
 
 /**
- * @brief Navigate up one level in the folder hierarchy.
+ * @brief Navigate back for one side only.
+ */
+void CDirFrame::OnSxsNavBackSide(int pane)
+{
+	if (!m_bSideBySideMode || !m_pCoordinator) return;
+
+	String newPath;
+	if (!m_pCoordinator->NavigateBackForSide(pane, newPath))
+		return;
+
+	CDirDoc* pDoc = dynamic_cast<CDirDoc*>(GetActiveDocument());
+	if (!pDoc) return;
+	const CDiffContext& ctxt = pDoc->GetDiffContext();
+
+	PathContext pathCtx;
+	if (pane == 0) {
+		pathCtx.SetLeft(newPath.c_str());
+		pathCtx.SetRight(ctxt.GetRightPath().c_str());
+	} else {
+		pathCtx.SetLeft(ctxt.GetLeftPath().c_str());
+		pathCtx.SetRight(newPath.c_str());
+	}
+	fileopenflags_t dwFlags[3] = {};
+	GetMainFrame()->DoFileOrFolderOpen(&pathCtx, dwFlags, nullptr, _T(""),
+		ctxt.m_bRecursive, nullptr);
+}
+
+/**
+ * @brief Navigate forward for one side only.
+ */
+void CDirFrame::OnSxsNavForwardSide(int pane)
+{
+	if (!m_bSideBySideMode || !m_pCoordinator) return;
+
+	String newPath;
+	if (!m_pCoordinator->NavigateForwardForSide(pane, newPath))
+		return;
+
+	CDirDoc* pDoc = dynamic_cast<CDirDoc*>(GetActiveDocument());
+	if (!pDoc) return;
+	const CDiffContext& ctxt = pDoc->GetDiffContext();
+
+	PathContext pathCtx;
+	if (pane == 0) {
+		pathCtx.SetLeft(newPath.c_str());
+		pathCtx.SetRight(ctxt.GetRightPath().c_str());
+	} else {
+		pathCtx.SetLeft(ctxt.GetLeftPath().c_str());
+		pathCtx.SetRight(newPath.c_str());
+	}
+	fileopenflags_t dwFlags[3] = {};
+	GetMainFrame()->DoFileOrFolderOpen(&pathCtx, dwFlags, nullptr, _T(""),
+		ctxt.m_bRecursive, nullptr);
+}
+
+/**
+ * @brief Navigate up one level for one side only.
+ */
+void CDirFrame::OnSxsUpLevelSide(int pane)
+{
+	if (!m_bSideBySideMode || !m_pCoordinator) return;
+
+	String parentPath;
+	if (!m_pCoordinator->GetParentPathForSide(pane, parentPath))
+		return; // Already at root
+
+	// Push current path to per-side history before navigating
+	m_pCoordinator->PushHistoryForSide(pane);
+
+	CDirDoc* pDoc = dynamic_cast<CDirDoc*>(GetActiveDocument());
+	if (!pDoc) return;
+	const CDiffContext& ctxt = pDoc->GetDiffContext();
+
+	PathContext pathCtx;
+	if (pane == 0) {
+		pathCtx.SetLeft(parentPath.c_str());
+		pathCtx.SetRight(ctxt.GetRightPath().c_str());
+	} else {
+		pathCtx.SetLeft(ctxt.GetLeftPath().c_str());
+		pathCtx.SetRight(parentPath.c_str());
+	}
+	fileopenflags_t dwFlags[3] = {};
+	GetMainFrame()->DoFileOrFolderOpen(&pathCtx, dwFlags, nullptr, _T(""),
+		ctxt.m_bRecursive, nullptr);
+}
+
+/**
+ * @brief Navigate up one level on both sides simultaneously.
+ */
+void CDirFrame::OnSxsUpLevelBoth()
+{
+	if (!m_bSideBySideMode || !m_pCoordinator) return;
+
+	// Push both sides' current paths to their respective histories
+	m_pCoordinator->PushHistoryForSide(0);
+	m_pCoordinator->PushHistoryForSide(1);
+
+	String leftParent, rightParent;
+	if (!m_pCoordinator->GetParentPaths(leftParent, rightParent))
+		return; // Already at root
+
+	CDirDoc* pDoc = dynamic_cast<CDirDoc*>(GetActiveDocument());
+	if (!pDoc) return;
+	const CDiffContext& ctxt = pDoc->GetDiffContext();
+
+	PathContext pathCtx;
+	pathCtx.SetLeft(leftParent.c_str());
+	pathCtx.SetRight(rightParent.c_str());
+	fileopenflags_t dwFlags[3] = {};
+	GetMainFrame()->DoFileOrFolderOpen(&pathCtx, dwFlags, nullptr, _T(""),
+		ctxt.m_bRecursive, nullptr);
+}
+
+/**
+ * @brief Navigate up one level in the folder hierarchy (both sides).
  */
 void CDirFrame::OnSxsUpLevel()
 {

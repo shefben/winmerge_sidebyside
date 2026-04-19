@@ -54,6 +54,7 @@ class CMergeApp : public CWinApp
 public:
 	bool m_bNeedIdleTimer;
 	CMultiDocTemplate* m_pOpenTemplate;
+	CMultiDocTemplate* m_pWelcomeTemplate;
 	CMultiDocTemplate* m_pDiffTemplate;
 	CMultiDocTemplate* m_pHexMergeTemplate;
 	CMultiDocTemplate* m_pDirTemplate;
@@ -96,6 +97,7 @@ public:
 	bool IsReallyIdle() const;
 	void RegisterIdleFunc(std::function<void()> func) { m_idleFuncs.push_back(func); };
 	CMultiDocTemplate* GetOpenTemplate();
+	CMultiDocTemplate* GetWelcomeTemplate();
 	CMultiDocTemplate* GetDiffTemplate();
 	CMultiDocTemplate* GetHexMergeTemplate();
 	CMultiDocTemplate* GetDirTemplate();

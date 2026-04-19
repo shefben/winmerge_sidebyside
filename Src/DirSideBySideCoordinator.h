@@ -23,6 +23,7 @@ class DirViewColItems;
 class CDiffContext;
 class CDirDoc;
 class CDirPaneView;
+class CDirSxSUnifiedView;
 class DIFFITEM;
 
 /** Folder content status for side-by-side icons */
@@ -62,6 +63,8 @@ public:
 	~CDirSideBySideCoordinator();
 
 	void SetPaneViews(CDirPaneView *pLeftPane, CDirPaneView *pRightPane);
+	void SetUnifiedView(CDirSxSUnifiedView *pUnifiedView);
+	CDirSxSUnifiedView* GetUnifiedView() const { return m_pUnifiedView; }
 
 	/** Rebuild the row mapping from the CDiffContext and update both panes */
 	void Redisplay();
@@ -98,8 +101,19 @@ public:
 	/** Compute folder content status for icon determination (cached) */
 	FolderContentStatus ComputeFolderContentStatus(const DIFFITEM &di) const;
 
+	/** Compute per-side folder content status.
+	 * @param side 0=left, 1=right
+	 * Returns status considering only orphans that belong to the given side.
+	 * A left-only orphan is "on the left side"; a right-only orphan is "on the right side".
+	 * Diffs (files existing on both sides) count for both sides.
+	 */
+	FolderContentStatus ComputeFolderContentStatusForSide(const DIFFITEM &di, int side) const;
+
 	/** Invalidate the folder content status cache (call when comparison results change) */
-	void InvalidateFolderStatusCache() { m_folderStatusCache.clear(); }
+	void InvalidateFolderStatusCache() { m_folderStatusCache.clear(); m_folderSideStatusCache.clear(); }
+
+	/** Invalidate folder status cache for a specific item and all its ancestors */
+	void InvalidateFolderStatusCacheFor(const DIFFITEM *di);
 
 	/** Get pane-specific icon image index */
 	int GetPaneColImage(const DIFFITEM &di, int pane) const;
@@ -171,15 +185,23 @@ public:
 	/** Touch timestamps — set to specific FILETIME */
 	static bool TouchToSpecificTime(const String& filePath, const FILETIME& ft);
 
-	/** Navigation history */
+	/** Navigation history (combined — both sides at once) */
 	void PushHistory(const String& leftPath, const String& rightPath);
 	bool NavigateBack(String& leftPath, String& rightPath);
 	bool NavigateForward(String& leftPath, String& rightPath);
 	bool CanNavigateBack() const { return !m_historyBack.empty(); }
 	bool CanNavigateForward() const { return !m_historyForward.empty(); }
 
-	/** Navigate up one level */
+	/** Navigate up one level (both sides) */
 	bool GetParentPaths(String& leftParent, String& rightParent) const;
+
+	/** Per-side navigation history */
+	void PushHistoryForSide(int pane);
+	bool NavigateBackForSide(int pane, String& newPath);
+	bool NavigateForwardForSide(int pane, String& newPath);
+	bool CanNavigateBackForSide(int pane) const;
+	bool CanNavigateForwardForSide(int pane) const;
+	bool GetParentPathForSide(int pane, String& parentPath) const;
 
 	/** Set base folder (re-root comparison to subfolder) */
 	bool SetBaseFolder(int pane, const String& subfolderPath);
@@ -232,12 +254,14 @@ public:
 
 private:
 	void BuildRowMappingChildren(DIFFITEM *diffpos, int level);
+	void BuildRowMappingFlat(DIFFITEM *diffpos);
 	void BuildRowMappingIgnoreStructure();
 	void SortRowMapping();
 
 	CDirDoc *m_pDoc;
 	CDirPaneView *m_pLeftPane;
 	CDirPaneView *m_pRightPane;
+	CDirSxSUnifiedView *m_pUnifiedView;
 	std::vector<SideBySideRowItem> m_rowMapping;
 	int m_nActivePane;
 	std::unique_ptr<DirViewFilterSettings> m_pDirFilter;
@@ -247,10 +271,17 @@ private:
 	String m_sNameFilter;             /**< Wildcard name filter pattern */
 	std::vector<String> m_logMessages; /**< Operation log messages */
 
-	/** Navigation history */
+	/** Navigation history (combined) */
 	struct HistoryEntry { String leftPath; String rightPath; };
 	std::vector<HistoryEntry> m_historyBack;
 	std::vector<HistoryEntry> m_historyForward;
+
+	/** Per-side navigation history */
+	struct SideHistoryEntry { String path; };
+	std::vector<SideHistoryEntry> m_historyBackLeft;
+	std::vector<SideHistoryEntry> m_historyBackRight;
+	std::vector<SideHistoryEntry> m_historyForwardLeft;
+	std::vector<SideHistoryEntry> m_historyForwardRight;
 
 	/** Advanced filter */
 	AdvancedFilter m_advFilter;
@@ -272,4 +303,17 @@ private:
 
 	/** Cache of computed folder content status to avoid recursive recomputation per draw */
 	mutable std::unordered_map<const DIFFITEM*, FolderContentStatus> m_folderStatusCache;
+
+	/** Per-side folder status cache: key = (DIFFITEM*, side) */
+	struct SideCacheKey {
+		const DIFFITEM* di;
+		int side;
+		bool operator==(const SideCacheKey& o) const { return di == o.di && side == o.side; }
+	};
+	struct SideCacheHash {
+		size_t operator()(const SideCacheKey& k) const {
+			return std::hash<const void*>()(k.di) ^ (std::hash<int>()(k.side) << 1);
+		}
+	};
+	mutable std::unordered_map<SideCacheKey, FolderContentStatus, SideCacheHash> m_folderSideStatusCache;
 };

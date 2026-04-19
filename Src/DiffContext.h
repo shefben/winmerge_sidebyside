@@ -8,6 +8,7 @@
 #define POCO_NO_UNWINDOWS 1
 #include <Poco/Mutex.h>
 #include <memory>
+#include <atomic>
 #include "PathContext.h"
 #include "DiffItemList.h"
 #include "FilterList.h"
@@ -174,6 +175,7 @@ public:
 
 	bool m_bIgnoreSmallTimeDiff; /**< Ignore small timedifferences when comparing by date */
 	CompareStats *m_pCompareStats; /**< Pointer to compare statistics */
+	std::atomic<DIFFITEM*> m_pActiveScanParent{nullptr}; /**< Folder currently being scanned by BFS (for UI hourglass) */
 
 	/**
 	 * Optimize compare by stopping after first difference.

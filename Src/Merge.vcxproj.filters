@@ -198,6 +198,9 @@
     <ClCompile Include="DirScan.cpp">
       <Filter>Source Files</Filter>
     </ClCompile>
+    <ClCompile Include="DirScanCache.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
     <ClCompile Include="DirTravel.cpp">
       <Filter>Source Files</Filter>
     </ClCompile>
@@ -588,6 +591,15 @@
     <ClCompile Include="DirGutterView.cpp">
       <Filter>MFCGui\MDIChild\FolderCompare\Source Files</Filter>
     </ClCompile>
+    <ClCompile Include="DirSxSUnifiedView.cpp">
+      <Filter>MFCGui\MDIChild\FolderCompare\Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="DirSxSLogPanel.cpp">
+      <Filter>MFCGui\MDIChild\FolderCompare\Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="DirSxSWelcomeView.cpp">
+      <Filter>MFCGui\MDIChild\FolderCompare\Source Files</Filter>
+    </ClCompile>
     <ClCompile Include="DirDoc.cpp">
       <Filter>MFCGui\MDIChild\FolderCompare\Source Files</Filter>
     </ClCompile>
@@ -876,6 +888,9 @@
       <Filter>Header Files</Filter>
     </ClInclude>
     <ClInclude Include="DirScan.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="DirScanCache.h">
       <Filter>Header Files</Filter>
     </ClInclude>
     <ClInclude Include="DirTravel.h">
@@ -1335,6 +1350,15 @@
       <Filter>MFCGui\MDIChild\FolderCompare\Header Files</Filter>
     </ClInclude>
     <ClInclude Include="DirSideBySideFilterBar.h">
+      <Filter>MFCGui\MDIChild\FolderCompare\Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="DirSxSUnifiedView.h">
+      <Filter>MFCGui\MDIChild\FolderCompare\Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="DirSxSLogPanel.h">
+      <Filter>MFCGui\MDIChild\FolderCompare\Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="DirSxSWelcomeView.h">
       <Filter>MFCGui\MDIChild\FolderCompare\Header Files</Filter>
     </ClInclude>
     <ClInclude Include="DirGutterView.h">

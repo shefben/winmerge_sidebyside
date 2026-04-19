@@ -19,6 +19,7 @@
 #include "Merge.h"
 #include "IMergeDoc.h"
 #include "DirPaneView.h"
+#include "DirSxSUnifiedView.h"
 #include "DirSideBySideCoordinator.h"
 #include "CompareOptions.h"
 #include "UnicodeString.h"
@@ -40,6 +41,7 @@
 #include "FilterErrorMessages.h"
 #include "DirActions.h"
 #include "DirScan.h"
+#include "DirScanCache.h"
 #include "MessageBoxDialog.h"
 #include "DirCmpReport.h"
 #include "DiffWrapper.h"
@@ -228,25 +230,59 @@ void CDirDoc::LoadSubstitutionFiltersList(CDiffContext* pCtxt)
 	pCtxt->m_pSubstitutionList = theApp.m_pSubstitutionFiltersList->MakeSubstitutionList();
 }
 
+CDirFrame* CDirDoc::GetDirFrame() const
+{
+	if (m_pDirView)
+		return m_pDirView->GetParentFrame();
+	if (m_bSideBySideMode && m_pCoordinator)
+	{
+		CDirSxSUnifiedView* pUnified = m_pCoordinator->GetUnifiedView();
+		if (pUnified)
+			return static_cast<CDirFrame*>(pUnified->GetParentFrame());
+		CDirPaneView* pLeft = m_pCoordinator->GetLeftPaneView();
+		if (pLeft)
+			return static_cast<CDirFrame*>(
+				static_cast<CView*>(pLeft)->GetParentFrame());
+	}
+	return nullptr;
+}
+
 void CDirDoc::DiffThreadCallback(int& state)
 {
 	if (state == CDiffThread::EVENT_COMPARE_COMPLETED)
+	{
 		m_elapsed = clock() - m_compareStart;
-	if (m_pDirView)
+		// Clear the active scan parent indicator (hourglass in Cmp column)
+		if (m_pCtxt)
+			m_pCtxt->m_pActiveScanParent.store(nullptr, std::memory_order_relaxed);
+	}
+	if (m_bSideBySideMode && m_pCoordinator)
+	{
+		// Unified view mode: send to the single CDirSxSUnifiedView
+		CDirSxSUnifiedView* pUnified = m_pCoordinator->GetUnifiedView();
+		if (pUnified)
+		{
+			HWND hWnd = pUnified->GetSafeHwnd();
+			if (hWnd)
+				PostMessage(hWnd, MSG_UI_UPDATE, state, false);
+		}
+		else
+		{
+			// Fallback: split-pane SxS mode
+			CDirPaneView* pLeft = m_pCoordinator->GetLeftPaneView();
+			if (pLeft)
+			{
+				HWND hWnd = pLeft->GetSafeHwnd();
+				if (hWnd)
+					PostMessage(hWnd, MSG_UI_UPDATE, state, false);
+			}
+		}
+	}
+	else if (m_pDirView)
 	{
 		HWND hWnd = m_pDirView->GetSafeHwnd();
 		if (hWnd)
 			PostMessage(hWnd, MSG_UI_UPDATE, state, false);
-	}
-	else if (m_bSideBySideMode && m_pCoordinator)
-	{
-		CDirPaneView* pLeft = m_pCoordinator->GetLeftPaneView();
-		if (pLeft)
-		{
-			HWND hWnd = pLeft->GetSafeHwnd();
-			if (hWnd)
-				PostMessage(hWnd, MSG_UI_UPDATE, state, false);
-		}
 	}
 }
 
@@ -259,7 +295,24 @@ void CDirDoc::InitDiffContext(CDiffContext *pCtxt)
 	DIFFOPTIONS options = {0};
 	Options::DiffOptions::Load(pOptions, options);
 
-	pCtxt->CreateCompareOptions(pOptions->GetInt(OPT_CMP_METHOD), options);
+	int nCmpMethod = pOptions->GetInt(OPT_CMP_METHOD);
+	if (m_bSideBySideMode)
+	{
+		bool bContents = pOptions->GetBool(OPT_CMP_SXS_COMPARE_CONTENTS);
+		bool bTimestamps = pOptions->GetBool(OPT_CMP_SXS_COMPARE_TIMESTAMPS);
+		bool bSize = pOptions->GetBool(OPT_CMP_SXS_COMPARE_SIZE);
+		if (bContents)
+			nCmpMethod = CMP_CONTENT;
+		else if (bTimestamps && bSize)
+			nCmpMethod = CMP_DATE_SIZE;
+		else if (bTimestamps)
+			nCmpMethod = CMP_DATE;
+		else if (bSize)
+			nCmpMethod = CMP_SIZE;
+		else
+			nCmpMethod = CMP_EXISTENCE;
+	}
+	pCtxt->CreateCompareOptions(nCmpMethod, options);
 
 	pCtxt->m_iGuessEncodingType = pOptions->GetInt(OPT_CP_DETECT);
 	if ((pCtxt->m_iGuessEncodingType >> 16) == 0)
@@ -371,17 +424,7 @@ void CDirDoc::Rescan()
 	if (m_pCtxt == nullptr)
 		return;
 
-	CDirFrame *pf = nullptr;
-	if (m_pDirView)
-		pf = m_pDirView->GetParentFrame();
-	else if (m_bSideBySideMode && m_pCoordinator && m_pCoordinator->GetLeftPaneView())
-	{
-		// In SxS mode, get frame from coordinator's pane views
-		CDirFrame *pFrame = static_cast<CDirFrame*>(
-			static_cast<CView*>(m_pCoordinator->GetLeftPaneView())->GetParentFrame());
-		pf = pFrame;
-	}
-
+	CDirFrame *pf = GetDirFrame();
 	if (pf == nullptr)
 		return;
 
@@ -403,14 +446,21 @@ void CDirDoc::Rescan()
 		pCmpProgressBar->StartUpdating();
 	}
 
+	// SxS mode: show progress bar immediately in marquee mode for the scan phase
+	if (m_bSideBySideMode)
+		pf->ShowScanProgressBar(true);
+
 	if (!m_bGeneratingReport)
 	{
 		if (m_pDirView)
 			m_pDirView->DeleteAllDisplayItems();
 		else if (m_pCoordinator)
 		{
-			// SxS mode: must clear pane views before RemoveAll() frees DIFFITEMs
+			// SxS mode: must clear views before RemoveAll() frees DIFFITEMs
 			// to prevent dangling DIFFITEM pointer dereferences in LVN_GETDISPINFO
+			CDirSxSUnifiedView* pUnified = m_pCoordinator->GetUnifiedView();
+			if (pUnified)
+				pUnified->DeleteAllDisplayItems();
 			if (m_pCoordinator->GetLeftPaneView())
 				m_pCoordinator->GetLeftPaneView()->DeleteAllDisplayItems();
 			if (m_pCoordinator->GetRightPaneView())
@@ -493,6 +543,24 @@ void CDirDoc::Rescan()
 	pf->SetFilterStatusDisplay(theApp.GetGlobalFileFilter()->GetMaskOrExpression().c_str());
 	pf->SetCompareMethodStatusDisplay(m_pCtxt->GetCompareMethod());
 
+	// SxS cache fast-path: try loading from cached DIFFITEM tree
+	if (m_bSideBySideMode && !m_bMarkedRescan && !m_bGeneratingReport)
+	{
+		PathContext cachePaths = m_pCtxt->GetNormalizedPaths();
+		int nCmpMethod = m_pCtxt->GetCompareMethod();
+		bool bRecursive = m_pCtxt->m_bRecursive;
+		if (DirScanCache::LoadCache(*m_pCtxt, cachePaths, nCmpMethod, bRecursive))
+		{
+			// Cache loaded successfully — skip collection + comparison threads
+			m_pCompareStats->SetCompareState(CompareStats::STATE_IDLE);
+			m_elapsed = clock() - m_compareStart;
+			pf->HideProgressBar();
+			Redisplay();
+			m_bMarkedRescan = false;
+			return;
+		}
+	}
+
 	// Folder names to compare are in the compare context
 	m_diffThread.SetContext(m_pCtxt.get());
 	m_diffThread.SetThreadCount(GetOptionsMgr()->GetInt(OPT_CMP_COMPARE_THREADS));
@@ -557,6 +625,44 @@ void CDirDoc::Rescan()
 			DirScan_CompareRequestedItems(myStruct, nullptr);
 			});
 		m_diffThread.SetMarkedRescan(true);
+	}
+	else if (m_bSideBySideMode && m_pCtxt->m_bRecursive)
+	{
+		// SxS BFS mode: scan one level at a time, compare inline at each level,
+		// fire progress events so items appear progressively in the UI.
+		// The collect function does both collection AND comparison (inline).
+		// The compare function is a no-op (just waits for collect to finish).
+		int nCmpMethod = m_pCtxt->GetCompareMethod();
+		bool bLightweight = (nCmpMethod == CMP_DATE || nCmpMethod == CMP_DATE_SIZE ||
+			nCmpMethod == CMP_SIZE || nCmpMethod == CMP_EXISTENCE);
+		if (bLightweight)
+		{
+			m_diffThread.SetCollectFunction([](DiffFuncStruct* myStruct) {
+				myStruct->context->m_pCompareStats->SetCompareThreadCount(1);
+				DirScan_GetItemsBFS(myStruct);
+			});
+			m_diffThread.SetCompareFunction([](DiffFuncStruct* myStruct) {
+				// BFS already did inline comparison — nothing to do.
+				// Just wait for collect to finish so thread lifecycle is correct.
+				myStruct->m_collectCompletedEvent.wait();
+			});
+		}
+		else
+		{
+			// Heavy compare method (CMP_CONTENT etc.) — use standard DFS + threaded compare
+			m_diffThread.SetCollectFunction([](DiffFuncStruct* myStruct) {
+				bool casesensitive = false;
+				int depth = myStruct->context->m_bRecursive ? -1 : 0;
+				PathContext paths = myStruct->context->GetNormalizedPaths();
+				String subdir[3] = {_T(""), _T(""), _T("")};
+				DirScan_GetItems(paths, subdir, myStruct,
+						casesensitive, depth, nullptr, myStruct->context->m_bWalkUniques);
+			});
+			m_diffThread.SetCompareFunction([](DiffFuncStruct* myStruct) {
+				DirScan_CompareItems(myStruct, nullptr);
+			});
+		}
+		m_diffThread.SetMarkedRescan(false);
 	}
 	else
 	{
@@ -788,14 +894,17 @@ void CDirDoc::UpdateChangedItem(const PathContext &paths,
 void CDirDoc::CompareReady()
 {
 	// Close and destroy the dialog after compare
-	CDirFrame *pf = nullptr;
-	if (m_pDirView)
-		pf = m_pDirView->GetParentFrame();
-	else if (m_bSideBySideMode && m_pCoordinator && m_pCoordinator->GetLeftPaneView())
-		pf = static_cast<CDirFrame*>(
-			static_cast<CView*>(m_pCoordinator->GetLeftPaneView())->GetParentFrame());
+	CDirFrame *pf = GetDirFrame();
 	if (pf)
 		pf->HideProgressBar();
+
+	// Save DIFFITEM tree to disk cache for SxS mode (subsequent opens load instantly)
+	if (m_bSideBySideMode && m_pCtxt)
+	{
+		PathContext cachePaths = m_pCtxt->GetNormalizedPaths();
+		DirScanCache::SaveCache(*m_pCtxt, cachePaths,
+			m_pCtxt->GetCompareMethod(), m_pCtxt->m_bRecursive);
+	}
 }
 
 /**
@@ -819,12 +928,7 @@ void CDirDoc::RefreshOptions()
  */
 void CDirDoc::UpdateHeaderPath(int nIndex)
 {
-	CDirFrame *pf = nullptr;
-	if (m_pDirView)
-		pf = m_pDirView->GetParentFrame();
-	else if (m_bSideBySideMode && m_pCoordinator && m_pCoordinator->GetLeftPaneView())
-		pf = static_cast<CDirFrame*>(
-			static_cast<CView*>(m_pCoordinator->GetLeftPaneView())->GetParentFrame());
+	CDirFrame *pf = GetDirFrame();
 	if (pf == nullptr)
 		return;
 	String sText;
@@ -1190,7 +1294,7 @@ bool CDirDoc::CompareFilesIfFilesAreLarge(int nFiles, const FileLocation ifilelo
 		}
 	}
 	CMessageBoxDialog dlg(
-		m_pDirView ? m_pDirView->GetParentFrame() : nullptr,
+		GetDirFrame(),
 		msg.c_str(), _T(""),
 		MB_YESNOCANCEL | MB_ICONQUESTION | MB_DONT_ASK_AGAIN, 0U, _T("CompareLargeFiles"));
 	INT_PTR ans = dlg.GetFormerResult();
@@ -1226,12 +1330,7 @@ bool CDirDoc::CompareFilesIfFilesAreLarge(int nFiles, const FileLocation ifilelo
 
 DirCompProgressBar* CDirDoc::GetCompProgressBar()
 {
-	CDirFrame *pf = nullptr;
-	if (m_pDirView)
-		pf = m_pDirView->GetParentFrame();
-	else if (m_bSideBySideMode && m_pCoordinator && m_pCoordinator->GetLeftPaneView())
-		pf = static_cast<CDirFrame*>(
-			static_cast<CView*>(m_pCoordinator->GetLeftPaneView())->GetParentFrame());
+	CDirFrame *pf = GetDirFrame();
 	if (pf == nullptr)
 		return nullptr;
 	return pf->GetCompProgressBar();

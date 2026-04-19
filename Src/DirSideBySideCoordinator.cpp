@@ -12,6 +12,7 @@
 #include "StdAfx.h"
 #include "DirSideBySideCoordinator.h"
 #include "DirPaneView.h"
+#include "DirSxSUnifiedView.h"
 #include "DirDoc.h"
 #include "DirFrame.h"
 #include "DiffContext.h"
@@ -43,6 +44,7 @@ CDirSideBySideCoordinator::CDirSideBySideCoordinator(CDirDoc *pDoc)
 	, m_bAlwaysShowFolders(true)
 	, m_bIgnoreFolderStructure(false)
 	, m_bAutoExpandApplied(false)
+	, m_pUnifiedView(nullptr)
 	, m_bScanningInProgress(false)
 	, m_advFilter{ _T(""), _T(""), -1, -1, _T("") }
 {
@@ -56,6 +58,11 @@ void CDirSideBySideCoordinator::SetPaneViews(CDirPaneView *pLeftPane, CDirPaneVi
 {
 	m_pLeftPane = pLeftPane;
 	m_pRightPane = pRightPane;
+}
+
+void CDirSideBySideCoordinator::SetUnifiedView(CDirSxSUnifiedView *pUnifiedView)
+{
+	m_pUnifiedView = pUnifiedView;
 }
 
 /**
@@ -94,12 +101,26 @@ void CDirSideBySideCoordinator::BuildRowMapping()
 
 	const CDiffContext &ctxt = m_pDoc->GetDiffContext();
 
+	// Guard against calling before the diff tree root is allocated.
+	// GetFirstDiffPosition() crashes if the internal root node hasn't been
+	// created yet (e.g. when user triggers sort before scan starts).
+	if (!ctxt.HasTreeRoot())
+		return;
+
 	// Refresh filter settings
 	m_pDirFilter.reset(new DirViewFilterSettings([](const String& name) { return GetOptionsMgr()->GetBool(name); }));
+
+	bool bTreeMode = GetOptionsMgr()->GetBool(OPT_TREE_MODE);
 
 	if (m_bIgnoreFolderStructure)
 	{
 		BuildRowMappingIgnoreStructure();
+	}
+	else if (!bTreeMode)
+	{
+		// Tree mode OFF: flat file list — recurse everything, skip directories
+		DIFFITEM *diffpos = ctxt.GetFirstDiffPosition();
+		BuildRowMappingFlat(diffpos);
 	}
 	else
 	{
@@ -253,6 +274,92 @@ void CDirSideBySideCoordinator::BuildRowMappingChildren(DIFFITEM *diffpos, int l
 }
 
 /**
+ * @brief Build flat file list (tree mode OFF).
+ * Recursively walks the DIFFITEM tree but skips directory entries and
+ * adds all file entries at indent level 0.  Always recurses into all
+ * children regardless of EXPANDED flag.
+ */
+void CDirSideBySideCoordinator::BuildRowMappingFlat(DIFFITEM *diffpos)
+{
+	const CDiffContext &ctxt = m_pDoc->GetDiffContext();
+	bool bSuppressFilters = GetOptionsMgr()->GetBool(OPT_DIRVIEW_SXS_SUPPRESS_FILTERS);
+	bool bHasNameFilter = !m_sNameFilter.empty();
+	String sIncludeFiles = GetOptionsMgr()->GetString(OPT_DIRVIEW_SXS_INCLUDE_FILES);
+	String sExcludeFiles = GetOptionsMgr()->GetString(OPT_DIRVIEW_SXS_EXCLUDE_FILES);
+
+	while (diffpos != nullptr)
+	{
+		DIFFITEM *curdiffpos = diffpos;
+		const DIFFITEM &di = ctxt.GetNextSiblingDiffPosition(diffpos);
+
+		if (!bSuppressFilters && !IsShowable(ctxt, di, *m_pDirFilter))
+			continue;
+
+		if (di.diffcode.isDirectory())
+		{
+			// Don't add folder row, but recurse into children
+			if (di.HasChildren())
+				BuildRowMappingFlat(ctxt.GetFirstChildDiffPosition(curdiffpos));
+			continue;
+		}
+
+		// Apply name filter
+		if (bHasNameFilter)
+		{
+			String filename;
+			for (int s = 0; s < ctxt.GetCompareDirs(); s++)
+			{
+				if (di.diffcode.exists(s))
+				{
+					filename = di.diffFileInfo[s].filename;
+					break;
+				}
+			}
+			if (!filename.empty() && !PathMatchSpec(filename.c_str(), m_sNameFilter.c_str()))
+				continue;
+		}
+
+		// Apply advanced filter
+		if (!PassesAdvancedFilter(di))
+			continue;
+
+		// Apply include/exclude patterns
+		if (!bSuppressFilters)
+		{
+			String filename;
+			for (int s = 0; s < ctxt.GetCompareDirs(); s++)
+			{
+				if (di.diffcode.exists(s))
+				{
+					filename = di.diffFileInfo[s].filename;
+					break;
+				}
+			}
+			if (!filename.empty())
+			{
+				if (!sIncludeFiles.empty() && sIncludeFiles != _T("*.*"))
+				{
+					if (!PathMatchSpec(filename.c_str(), sIncludeFiles.c_str()))
+						continue;
+				}
+				if (!sExcludeFiles.empty())
+				{
+					if (PathMatchSpec(filename.c_str(), sExcludeFiles.c_str()))
+						continue;
+				}
+			}
+		}
+
+		SideBySideRowItem rowItem;
+		rowItem.diffpos = curdiffpos;
+		rowItem.existsOnLeft = di.diffcode.exists(0);
+		rowItem.existsOnRight = di.diffcode.exists(ctxt.GetCompareDirs() - 1);
+		rowItem.indent = 0;
+		m_rowMapping.push_back(rowItem);
+	}
+}
+
+/**
  * @brief Rebuild the display in both panes from the current diff context.
  */
 void CDirSideBySideCoordinator::Redisplay()
@@ -261,17 +368,28 @@ void CDirSideBySideCoordinator::Redisplay()
 	BuildRowMapping();
 	UpdateStatusCounts();
 
-	if (m_pLeftPane)
-		m_pLeftPane->UpdateFromRowMapping();
-	if (m_pRightPane)
-		m_pRightPane->UpdateFromRowMapping();
-
-	// Update status bar with counts
-	if (m_pLeftPane)
+	// Update the unified view if present, otherwise update split panes
+	if (m_pUnifiedView)
 	{
-		CDirFrame *pFrame = m_pLeftPane->GetParentFrame();
+		m_pUnifiedView->UpdateFromRowMapping();
+		CDirFrame *pFrame = m_pUnifiedView->GetParentFrame();
 		if (pFrame)
 			pFrame->SetStatus(FormatStatusString().c_str());
+	}
+	else
+	{
+		if (m_pLeftPane)
+			m_pLeftPane->UpdateFromRowMapping();
+		if (m_pRightPane)
+			m_pRightPane->UpdateFromRowMapping();
+
+		// Update status bar with counts
+		if (m_pLeftPane)
+		{
+			CDirFrame *pFrame = m_pLeftPane->GetParentFrame();
+			if (pFrame)
+				pFrame->SetStatus(FormatStatusString().c_str());
+		}
 	}
 }
 
@@ -280,11 +398,15 @@ void CDirSideBySideCoordinator::Redisplay()
  */
 void CDirSideBySideCoordinator::SwapSides()
 {
-	if (m_pDoc)
-	{
-		m_pDoc->Swap(0, m_pDoc->m_nDirs - 1);
-		Redisplay();
-	}
+	if (!m_pDoc)
+		return;
+	if (m_pDoc->m_diffThread.GetThreadState() != CDiffThread::THREAD_COMPLETED)
+		return;  // Can't swap while scanning
+
+	m_pDoc->Swap(0, m_pDoc->m_nDirs - 1);
+	// CDirDoc::Swap already calls UpdateHeaderPath for all panes,
+	// which updates the header bar combo text via SetCaption
+	Redisplay();
 }
 
 /**
@@ -356,12 +478,127 @@ FolderContentStatus CDirSideBySideCoordinator::ComputeFolderContentStatus(const 
 	case 0: result = FOLDER_STATUS_UNKNOWN; break;
 	case 1: result = FOLDER_STATUS_ALL_SAME; break;
 	case 2: result = FOLDER_STATUS_ALL_DIFFERENT; break;
+	case 3: result = FOLDER_STATUS_ALL_DIFFERENT; break;  // same+diff → red (no orphans)
 	case 4: result = FOLDER_STATUS_UNIQUE_ONLY; break;
+	case 5: result = FOLDER_STATUS_UNIQUE_ONLY; break;    // same+orphan → purple (no content diffs)
+	case 6: result = FOLDER_STATUS_MIXED; break;           // diff+orphan → red+purple
+	case 7: result = FOLDER_STATUS_MIXED; break;           // all three → red+purple
 	default: result = FOLDER_STATUS_MIXED; break;
 	}
 
 	m_folderStatusCache[&di] = result;
 	return result;
+}
+
+/**
+ * @brief Compute per-side folder content status.
+ *
+ * For the left side (side=0): orphans are children that exist ONLY on the left.
+ * For the right side (side=1): orphans are children that exist ONLY on the right.
+ * Diffs (files existing on both sides with different content) count for both sides.
+ * Same files (identical) count for both sides.
+ *
+ * This allows separate icons: left folder may be red-only (diffs but no left orphans),
+ * while right folder is red+purple (diffs AND right orphans).
+ */
+FolderContentStatus CDirSideBySideCoordinator::ComputeFolderContentStatusForSide(
+	const DIFFITEM &di, int side) const
+{
+	if (!di.HasChildren() || !m_pDoc || !m_pDoc->HasDiffs())
+		return FOLDER_STATUS_UNKNOWN;
+
+	SideCacheKey cacheKey{&di, side};
+	auto it = m_folderSideStatusCache.find(cacheKey);
+	if (it != m_folderSideStatusCache.end())
+		return it->second;
+
+	const CDiffContext &ctxt = m_pDoc->GetDiffContext();
+	int nDirs = ctxt.GetCompareDirs();
+	int sideIdx = (side == 0) ? 0 : (nDirs - 1);
+
+	bool hasSame = false;
+	bool hasDiff = false;
+	bool hasOrphanOnThisSide = false;
+
+	DIFFITEM *childpos = ctxt.GetFirstChildDiffPosition(const_cast<DIFFITEM*>(&di));
+	while (childpos != nullptr)
+	{
+		const DIFFITEM &child = ctxt.GetNextSiblingDiffPosition(childpos);
+
+		if (child.diffcode.isResultFiltered())
+			continue;
+
+		if (!IsItemExistAll(ctxt, child))
+		{
+			// Orphan — check if it exists on THIS side
+			if (child.diffcode.exists(sideIdx))
+				hasOrphanOnThisSide = true;
+			// If it doesn't exist on this side, it's not relevant to this side's icon
+		}
+		else if (child.diffcode.isResultSame())
+			hasSame = true;
+		else if (child.diffcode.isResultDiff())
+			hasDiff = true;
+
+		// Recurse into subfolders
+		if (child.diffcode.isDirectory() && child.HasChildren())
+		{
+			FolderContentStatus childStatus = ComputeFolderContentStatusForSide(child, side);
+			switch (childStatus)
+			{
+			case FOLDER_STATUS_ALL_SAME:
+				hasSame = true;
+				break;
+			case FOLDER_STATUS_ALL_DIFFERENT:
+				hasDiff = true;
+				break;
+			case FOLDER_STATUS_UNIQUE_ONLY:
+				hasOrphanOnThisSide = true;
+				break;
+			case FOLDER_STATUS_MIXED:
+				hasSame = true;
+				hasDiff = true;
+				hasOrphanOnThisSide = true;
+				break;
+			default:
+				break;
+			}
+		}
+	}
+
+	int flags = (hasSame ? 1 : 0) | (hasDiff ? 2 : 0) | (hasOrphanOnThisSide ? 4 : 0);
+	FolderContentStatus result;
+	switch (flags)
+	{
+	case 0: result = FOLDER_STATUS_UNKNOWN; break;
+	case 1: result = FOLDER_STATUS_ALL_SAME; break;
+	case 2: result = FOLDER_STATUS_ALL_DIFFERENT; break;
+	case 3: result = FOLDER_STATUS_ALL_DIFFERENT; break;  // same+diff → red (no orphans on this side)
+	case 4: result = FOLDER_STATUS_UNIQUE_ONLY; break;
+	case 5: result = FOLDER_STATUS_UNIQUE_ONLY; break;    // same+orphan → purple (no content diffs)
+	case 6: result = FOLDER_STATUS_MIXED; break;           // diff+orphan → red+purple
+	case 7: result = FOLDER_STATUS_MIXED; break;           // all three → red+purple
+	default: result = FOLDER_STATUS_MIXED; break;
+	}
+
+	m_folderSideStatusCache[cacheKey] = result;
+	return result;
+}
+
+/**
+ * @brief Invalidate folder status cache for a specific item and all its ancestors.
+ * Used after CompareExpandedChildren / ExpandSubdir to ensure parent folders
+ * reflect updated child comparison results.
+ */
+void CDirSideBySideCoordinator::InvalidateFolderStatusCacheFor(const DIFFITEM *di)
+{
+	while (di != nullptr)
+	{
+		m_folderStatusCache.erase(di);
+		m_folderSideStatusCache.erase({di, 0});
+		m_folderSideStatusCache.erase({di, 1});
+		di = di->GetParentLink();
+	}
 }
 
 /**
@@ -414,6 +651,22 @@ int CDirSideBySideCoordinator::GetPaneColImage(const DIFFITEM &di, int pane) con
 void CDirSideBySideCoordinator::GetSelectedItems(int pane, std::vector<DIFFITEM*>& items) const
 {
 	items.clear();
+
+	// Unified view mode: use the single list
+	if (m_pUnifiedView)
+	{
+		CListCtrl &list = m_pUnifiedView->GetListCtrl();
+		int nItem = -1;
+		while ((nItem = list.GetNextItem(nItem, LVNI_SELECTED)) != -1)
+		{
+			DIFFITEM *key = m_pUnifiedView->GetItemKey(nItem);
+			if (key != nullptr)
+				items.push_back(key);
+		}
+		return;
+	}
+
+	// Split pane mode
 	CDirPaneView *pView = (pane == 0) ? m_pLeftPane : m_pRightPane;
 	if (!pView)
 		return;
@@ -657,6 +910,18 @@ void CDirSideBySideCoordinator::SelectRowInBothPanes(int row)
 		list.SetItemState(row, LVIS_SELECTED | LVIS_FOCUSED, LVIS_SELECTED | LVIS_FOCUSED);
 		list.EnsureVisible(row, FALSE);
 	};
+
+	// Unified view mode
+	if (m_pUnifiedView)
+	{
+		CListCtrl &list = m_pUnifiedView->GetListCtrl();
+		int nItem = -1;
+		while ((nItem = list.GetNextItem(nItem, LVNI_SELECTED)) != -1)
+			list.SetItemState(nItem, 0, LVIS_SELECTED | LVIS_FOCUSED);
+		list.SetItemState(row, LVIS_SELECTED | LVIS_FOCUSED, LVIS_SELECTED | LVIS_FOCUSED);
+		list.EnsureVisible(row, FALSE);
+		return;
+	}
 
 	selectRow(m_pLeftPane);
 	selectRow(m_pRightPane);
@@ -1159,6 +1424,101 @@ bool CDirSideBySideCoordinator::GetParentPaths(String& leftParent, String& right
 		return false;
 
 	return true;
+}
+
+/**
+ * @brief Push current path for one side onto that side's back history.
+ */
+void CDirSideBySideCoordinator::PushHistoryForSide(int pane)
+{
+	if (!m_pDoc || !m_pDoc->HasDiffs()) return;
+	const CDiffContext &ctxt = m_pDoc->GetDiffContext();
+	int idx = (pane == 0) ? 0 : (ctxt.GetCompareDirs() - 1);
+	SideHistoryEntry entry;
+	entry.path = ctxt.GetPath(idx);
+
+	if (pane == 0) {
+		m_historyBackLeft.push_back(entry);
+		m_historyForwardLeft.clear();
+	} else {
+		m_historyBackRight.push_back(entry);
+		m_historyForwardRight.clear();
+	}
+}
+
+/**
+ * @brief Navigate back for one side only.
+ */
+bool CDirSideBySideCoordinator::NavigateBackForSide(int pane, String& newPath)
+{
+	auto& backStack = (pane == 0) ? m_historyBackLeft : m_historyBackRight;
+	auto& fwdStack = (pane == 0) ? m_historyForwardLeft : m_historyForwardRight;
+
+	if (backStack.empty()) return false;
+
+	// Push current path to forward stack
+	if (m_pDoc && m_pDoc->HasDiffs())
+	{
+		const CDiffContext &ctxt = m_pDoc->GetDiffContext();
+		int idx = (pane == 0) ? 0 : (ctxt.GetCompareDirs() - 1);
+		SideHistoryEntry current;
+		current.path = ctxt.GetPath(idx);
+		fwdStack.push_back(current);
+	}
+
+	SideHistoryEntry entry = backStack.back();
+	backStack.pop_back();
+	newPath = entry.path;
+	return true;
+}
+
+/**
+ * @brief Navigate forward for one side only.
+ */
+bool CDirSideBySideCoordinator::NavigateForwardForSide(int pane, String& newPath)
+{
+	auto& backStack = (pane == 0) ? m_historyBackLeft : m_historyBackRight;
+	auto& fwdStack = (pane == 0) ? m_historyForwardLeft : m_historyForwardRight;
+
+	if (fwdStack.empty()) return false;
+
+	// Push current path to back stack
+	if (m_pDoc && m_pDoc->HasDiffs())
+	{
+		const CDiffContext &ctxt = m_pDoc->GetDiffContext();
+		int idx = (pane == 0) ? 0 : (ctxt.GetCompareDirs() - 1);
+		SideHistoryEntry current;
+		current.path = ctxt.GetPath(idx);
+		backStack.push_back(current);
+	}
+
+	SideHistoryEntry entry = fwdStack.back();
+	fwdStack.pop_back();
+	newPath = entry.path;
+	return true;
+}
+
+bool CDirSideBySideCoordinator::CanNavigateBackForSide(int pane) const
+{
+	return (pane == 0) ? !m_historyBackLeft.empty() : !m_historyBackRight.empty();
+}
+
+bool CDirSideBySideCoordinator::CanNavigateForwardForSide(int pane) const
+{
+	return (pane == 0) ? !m_historyForwardLeft.empty() : !m_historyForwardRight.empty();
+}
+
+/**
+ * @brief Get parent path for one side only.
+ */
+bool CDirSideBySideCoordinator::GetParentPathForSide(int pane, String& parentPath) const
+{
+	if (!m_pDoc || !m_pDoc->HasDiffs()) return false;
+	const CDiffContext &ctxt = m_pDoc->GetDiffContext();
+	int idx = (pane == 0) ? 0 : (ctxt.GetCompareDirs() - 1);
+	String curPath = ctxt.GetPath(idx);
+	parentPath = paths::GetParentPath(curPath);
+	return (parentPath != curPath); // false if already at root
 }
 
 /**

@@ -101,8 +101,9 @@ bool CDiffContext::UpdateInfoFromDiskHalf(DIFFITEM &di, int nIndex)
 	DiffFileInfo & dfi = di.diffFileInfo[nIndex];
 	if (!dfi.Update(filepath))
 		return false;
-	UpdateVersion(di, nIndex);
-	dfi.encoding = codepage_detect::Guess(filepath, m_iGuessEncodingType);
+	// Encoding detection and version extraction deferred to comparison phase.
+	// During collection we only need size/date/attributes from dfi.Update().
+	// This eliminates 40K+ file opens for encoding detection on large dirs.
 	return true;
 }
 

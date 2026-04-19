@@ -33,6 +33,7 @@
 #include "MainFrm.h"
 #include "MergeEditFrm.h"
 #include "DirFrame.h"
+#include "DirSxSWelcomeView.h"
 #include "MergeDoc.h"
 #include "DirDoc.h"
 #include "OutputDoc.h"
@@ -107,6 +108,7 @@ END_MESSAGE_MAP()
 CMergeApp::CMergeApp() :
   m_bNeedIdleTimer(false)
 , m_pOpenTemplate(nullptr)
+, m_pWelcomeTemplate(nullptr)
 , m_pDiffTemplate(nullptr)
 , m_pHexMergeTemplate(nullptr)
 , m_pDirTemplate(nullptr)
@@ -511,6 +513,20 @@ CMultiDocTemplate* CMergeApp::GetOpenTemplate()
 		AddDocTemplate(m_pOpenTemplate);
 	}
 	return m_pOpenTemplate;
+}
+
+CMultiDocTemplate* CMergeApp::GetWelcomeTemplate()
+{
+	if (!m_pWelcomeTemplate)
+	{
+		m_pWelcomeTemplate = new CMultiDocTemplate(
+			IDR_MAINFRAME,
+			RUNTIME_CLASS(COpenDoc),
+			RUNTIME_CLASS(COpenFrame),
+			RUNTIME_CLASS(CDirSxSWelcomeView));
+		AddDocTemplate(m_pWelcomeTemplate);
+	}
+	return m_pWelcomeTemplate;
 }
 
 CMultiDocTemplate* CMergeApp::GetDiffTemplate()
@@ -1056,9 +1072,20 @@ bool CMergeApp::ParseArgsAndDoOpen(MergeCmdLineInfo& cmdInfo, CMainFrame* pMainF
 			}
 			else
 			{
-				bool showFiles = m_pOptions->GetBool(OPT_SHOW_SELECT_FILES_AT_STARTUP);
-				if (showFiles)
-					pMainFrame->DoFileOrFolderOpen();
+				if (m_pOptions->GetBool(OPT_DIRVIEW_SIDEBYSIDE_MODE))
+				{
+					// SxS mode: always show welcome view regardless of OPT_SHOW_SELECT_FILES_AT_STARTUP
+					CMultiDocTemplate *pTpl = GetWelcomeTemplate();
+					CDocument *pDoc = pTpl ? pTpl->OpenDocumentFile(nullptr) : nullptr;
+					if (!pDoc)
+						pMainFrame->DoFileOrFolderOpen();  // fallback
+				}
+				else
+				{
+					bool showFiles = m_pOptions->GetBool(OPT_SHOW_SELECT_FILES_AT_STARTUP);
+					if (showFiles)
+						pMainFrame->DoFileOrFolderOpen();
+				}
 			}
 		}
 	}

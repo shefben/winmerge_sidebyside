@@ -38,7 +38,6 @@ public:
 
 protected:
 	CDirSideBySideCoordinator* m_pCoordinator;
-	CStatic m_labelFilter;            /**< "Filter:" label */
 	CEdit m_editFilter;               /**< Filter pattern edit control */
 	CButton m_btnFilters;             /**< "Filters" dropdown button */
 	CButton m_btnPeek;                /**< "Peek" toggle button */

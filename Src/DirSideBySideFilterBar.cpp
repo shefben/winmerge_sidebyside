@@ -23,13 +23,20 @@
 #define new DEBUG_NEW
 #endif
 
-// Beyond Compare dark theme colors for filter bar
+static bool IsSystemDarkMode()
+{
+	COLORREF bg = ::GetSysColor(COLOR_WINDOW);
+	int luminance = (GetRValue(bg) * 299 + GetGValue(bg) * 587 + GetBValue(bg) * 114) / 1000;
+	return luminance < 128;
+}
+
+// Theme-aware colors for filter bar
 namespace BcFilterColors
 {
-	static const COLORREF BG       = RGB(45, 48, 50);
-	static const COLORREF EDIT_BG  = RGB(35, 38, 40);
-	static const COLORREF TEXT     = RGB(200, 200, 200);
-	static const COLORREF BTN_BG  = RGB(55, 60, 62);
+	static COLORREF BG()       { return IsSystemDarkMode() ? RGB(45, 48, 50) : ::GetSysColor(COLOR_BTNFACE); }
+	static COLORREF EDIT_BG()  { return IsSystemDarkMode() ? RGB(35, 38, 40) : ::GetSysColor(COLOR_WINDOW); }
+	static COLORREF FG_TEXT()  { return IsSystemDarkMode() ? RGB(200, 200, 200) : ::GetSysColor(COLOR_WINDOWTEXT); }
+	static COLORREF BTN_FACE() { return IsSystemDarkMode() ? RGB(55, 60, 62) : ::GetSysColor(COLOR_BTNFACE); }
 }
 
 // Internal control IDs for the in-memory dialog children
@@ -55,8 +62,8 @@ IMPLEMENT_DYNAMIC(CDirSideBySideFilterBar, CControlBar)
 CDirSideBySideFilterBar::CDirSideBySideFilterBar()
 	: m_pCoordinator(nullptr)
 {
-	m_brDarkBg.CreateSolidBrush(BcFilterColors::BG);
-	m_brDarkEdit.CreateSolidBrush(BcFilterColors::EDIT_BG);
+	m_brDarkBg.CreateSolidBrush(BcFilterColors::BG());
+	m_brDarkEdit.CreateSolidBrush(BcFilterColors::EDIT_BG());
 }
 
 CDirSideBySideFilterBar::~CDirSideBySideFilterBar()
@@ -124,13 +131,6 @@ BOOL CDirSideBySideFilterBar::Create(CWnd* pParentWnd)
 	int y = (barH - editH) / 2;
 	int x = px(4);
 
-	// Create "Filter:" label
-	CRect rcLabel(x, y, x + px(36), y + editH);
-	m_labelFilter.Create(_T("Filter:"), WS_CHILD | WS_VISIBLE | SS_CENTERIMAGE,
-		rcLabel, this, IDC_FILTER_LABEL);
-	m_labelFilter.SetFont(&m_editFont);
-	x = rcLabel.right + px(4);
-
 	// Create wide filter edit
 	int editW = px(250);
 	CRect rcEdit(x, y, x + editW, y + editH);
@@ -151,7 +151,8 @@ BOOL CDirSideBySideFilterBar::Create(CWnd* pParentWnd)
 	m_btnFilters.Create(_T("Filters..."), WS_CHILD | WS_VISIBLE | BS_PUSHBUTTON | BS_OWNERDRAW,
 		rcBtn, this, IDC_FILTER_BTN);
 	m_btnFilters.SetFont(&m_editFont);
-	SetWindowTheme(m_btnFilters.m_hWnd, L"", L"");
+	if (IsSystemDarkMode())
+		SetWindowTheme(m_btnFilters.m_hWnd, L"", L"");
 	x = rcBtn.right + px(4);
 
 	// Create "Peek" toggle button (owner-drawn for dark theme)
@@ -160,7 +161,8 @@ BOOL CDirSideBySideFilterBar::Create(CWnd* pParentWnd)
 	m_btnPeek.Create(_T("Peek"), WS_CHILD | WS_VISIBLE | BS_PUSHBUTTON | BS_OWNERDRAW,
 		rcPeek, this, IDC_PEEK_BTN);
 	m_btnPeek.SetFont(&m_editFont);
-	SetWindowTheme(m_btnPeek.m_hWnd, L"", L"");
+	if (IsSystemDarkMode())
+		SetWindowTheme(m_btnPeek.m_hWnd, L"", L"");
 
 	// Update peek button state from saved option
 	if (GetOptionsMgr()->GetBool(OPT_DIRVIEW_SXS_SUPPRESS_FILTERS))
@@ -196,28 +198,34 @@ BOOL CDirSideBySideFilterBar::OnEraseBkgnd(CDC* pDC)
 {
 	CRect rc;
 	GetClientRect(&rc);
-	pDC->FillSolidRect(&rc, BcFilterColors::BG);
+	pDC->FillSolidRect(&rc, BcFilterColors::BG());
 	return TRUE;
 }
 
 HBRUSH CDirSideBySideFilterBar::OnCtlColor(CDC* pDC, CWnd* pWnd, UINT nCtlColor)
 {
+	// Recreate brushes if theme colors have changed
+	m_brDarkBg.DeleteObject();
+	m_brDarkBg.CreateSolidBrush(BcFilterColors::BG());
+	m_brDarkEdit.DeleteObject();
+	m_brDarkEdit.CreateSolidBrush(BcFilterColors::EDIT_BG());
+
 	if (nCtlColor == CTLCOLOR_EDIT)
 	{
-		pDC->SetBkColor(BcFilterColors::EDIT_BG);
-		pDC->SetTextColor(BcFilterColors::TEXT);
+		pDC->SetBkColor(BcFilterColors::EDIT_BG());
+		pDC->SetTextColor(BcFilterColors::FG_TEXT());
 		return (HBRUSH)m_brDarkEdit.GetSafeHandle();
 	}
 	if (nCtlColor == CTLCOLOR_STATIC)
 	{
 		pDC->SetBkMode(TRANSPARENT);
-		pDC->SetTextColor(BcFilterColors::TEXT);
+		pDC->SetTextColor(BcFilterColors::FG_TEXT());
 		return (HBRUSH)m_brDarkBg.GetSafeHandle();
 	}
 	if (nCtlColor == CTLCOLOR_BTN)
 	{
-		pDC->SetBkColor(BcFilterColors::BG);
-		pDC->SetTextColor(BcFilterColors::TEXT);
+		pDC->SetBkColor(BcFilterColors::BG());
+		pDC->SetTextColor(BcFilterColors::FG_TEXT());
 		return (HBRUSH)m_brDarkBg.GetSafeHandle();
 	}
 	return CControlBar::OnCtlColor(pDC, pWnd, nCtlColor);
@@ -234,14 +242,17 @@ void CDirSideBySideFilterBar::OnDrawItem(int nIDCtl, LPDRAWITEMSTRUCT lpDIS)
 		RECT rc = lpDIS->rcItem;
 		bool bPressed = (lpDIS->itemState & ODS_SELECTED) != 0;
 
-		// Background
-		COLORREF bg = bPressed ? RGB(35, 38, 40) : BcFilterColors::BTN_BG;
+		// Background — theme-aware
+		bool bDark = IsSystemDarkMode();
+		COLORREF bg = bPressed ? (bDark ? RGB(35, 38, 40) : ::GetSysColor(COLOR_BTNSHADOW))
+		                       : BcFilterColors::BTN_FACE();
 		HBRUSH hBrush = CreateSolidBrush(bg);
 		FillRect(hDC, &rc, hBrush);
 		DeleteObject(hBrush);
 
-		// Border
-		HPEN hPen = CreatePen(PS_SOLID, 1, RGB(70, 75, 78));
+		// Border — theme-aware
+		COLORREF borderClr = bDark ? RGB(70, 75, 78) : ::GetSysColor(COLOR_BTNSHADOW);
+		HPEN hPen = CreatePen(PS_SOLID, 1, borderClr);
 		HPEN hOldPen = (HPEN)SelectObject(hDC, hPen);
 		HBRUSH hNull = (HBRUSH)GetStockObject(NULL_BRUSH);
 		HBRUSH hOldBr = (HBRUSH)SelectObject(hDC, hNull);
@@ -252,7 +263,7 @@ void CDirSideBySideFilterBar::OnDrawItem(int nIDCtl, LPDRAWITEMSTRUCT lpDIS)
 
 		// Text
 		SetBkMode(hDC, TRANSPARENT);
-		SetTextColor(hDC, BcFilterColors::TEXT);
+		SetTextColor(hDC, BcFilterColors::FG_TEXT());
 		HFONT hOldFont = nullptr;
 		if (m_editFont.GetSafeHandle())
 			hOldFont = (HFONT)SelectObject(hDC, m_editFont.GetSafeHandle());
@@ -344,11 +355,7 @@ void CDirSideBySideFilterBar::OnSize(UINT nType, int cx, int cy)
 	int barH = px(22);
 	int y = (barH - editH) / 2;
 
-	// Get label right edge
-	CRect rcLabel;
-	m_labelFilter.GetWindowRect(&rcLabel);
-	ScreenToClient(&rcLabel);
-	int xAfterLabel = rcLabel.right + px(4);
+	int xAfterLabel = px(4);
 
 	// Place Peek button at right edge
 	int peekW = px(40);

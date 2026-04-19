@@ -8,6 +8,8 @@
 
 #include <memory>
 #include <functional>
+#include <mutex>
+#include <deque>
 #define POCO_NO_UNWINDOWS 1
 #include <Poco/Thread.h>
 #include <Poco/BasicEvent.h>
@@ -38,6 +40,8 @@ struct DiffFuncStruct
 	std::function<void (DiffFuncStruct*)> m_fncCompare;
 	bool bMarkedRescan;	/**< Is the rescan due to "Refresh Selected"? */
 	Poco::Event m_collectCompletedEvent;
+	std::mutex m_priorityMutex; /**< Protects m_priorityQueue */
+	std::deque<DIFFITEM*> m_priorityQueue; /**< Folders to scan with priority (user-expanded) */
 
 	DiffFuncStruct()
 		: context(nullptr)
@@ -102,6 +106,11 @@ public:
 	void Pause() { m_bPaused = true; }
 	void Continue() { m_bPaused = false; }
 	bool IsPaused() const { return m_bPaused; }
+	void RequestPriorityScan(DIFFITEM* folder)
+	{
+		std::lock_guard<std::mutex> lock(m_pDiffParm->m_priorityMutex);
+		m_pDiffParm->m_priorityQueue.push_back(folder);
+	}
 
 // runtime interface for child thread, called on child thread
 	bool ShouldAbort() const;
