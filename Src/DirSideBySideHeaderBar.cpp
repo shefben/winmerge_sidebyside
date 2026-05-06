@@ -70,6 +70,17 @@ BEGIN_MESSAGE_MAP(CDirSideBySideHeaderBar, CDialogBar)
 	ON_WM_ERASEBKGND()
 	ON_WM_CTLCOLOR()
 	ON_WM_DRAWITEM()
+	ON_BN_CLICKED(IDC_SXS_BACK_LEFT,     OnBackLeft)
+	ON_BN_CLICKED(IDC_SXS_BACK_RIGHT,    OnBackRight)
+	ON_BN_CLICKED(IDC_SXS_FORWARD_LEFT,  OnForwardLeft)
+	ON_BN_CLICKED(IDC_SXS_FORWARD_RIGHT, OnForwardRight)
+	ON_BN_CLICKED(IDC_SXS_UPLEVEL_LEFT,  OnUpLevelLeft)
+	ON_BN_CLICKED(IDC_SXS_UPLEVEL_RIGHT, OnUpLevelRight)
+	ON_BN_CLICKED(IDC_SXS_BROWSE_LEFT,   OnBrowseLeft)
+	ON_BN_CLICKED(IDC_SXS_BROWSE_RIGHT,  OnBrowseRight)
+	ON_BN_CLICKED(IDC_SXS_UPLEVEL_BOTH,  OnUpLevelBoth)
+	ON_CBN_SELCHANGE(IDC_SXS_COMBO_LEFT,  OnComboSelChangeLeft)
+	ON_CBN_SELCHANGE(IDC_SXS_COMBO_RIGHT, OnComboSelChangeRight)
 END_MESSAGE_MAP()
 
 CDirSideBySideHeaderBar::CDirSideBySideHeaderBar()
@@ -199,19 +210,61 @@ void CDirSideBySideHeaderBar::DrawIconButton(LPDRAWITEMSTRUCT lpDIS, int iconTyp
 		break;
 
 	case ICON_UPLEVEL_BOTH:
-		// Double up arrow: two ^ shapes stacked
+		// Folder with two up-arrows side by side; arrow tips above folder top edge.
 		{
-			int sz = 3;
-			// Top arrow head
-			MoveToEx(hDC, mx - sz, my - 1, nullptr);
-			LineTo(hDC, mx, my - sz - 1);
-			MoveToEx(hDC, mx, my - sz - 1, nullptr);
-			LineTo(hDC, mx + sz, my - 1);
-			// Bottom arrow head
-			MoveToEx(hDC, mx - sz, my + 4, nullptr);
-			LineTo(hDC, mx, my + 1);
-			MoveToEx(hDC, mx, my + 1, nullptr);
-			LineTo(hDC, mx + sz, my + 4);
+			HPEN hFolderPen = CreatePen(PS_SOLID, 1, BcHdr::ICON());
+			HPEN hPrev = (HPEN)SelectObject(hDC, hFolderPen);
+			HBRUSH hFolderBr = CreateSolidBrush(RGB(180, 160, 80));
+			HBRUSH hPrevBr = (HBRUSH)SelectObject(hDC, hFolderBr);
+			// Folder body (taller to fit arrows inside)
+			RECT rcFolder = { mx - 7, my - 1, mx + 7, my + 6 };
+			Rectangle(hDC, rcFolder.left, rcFolder.top, rcFolder.right, rcFolder.bottom);
+			// Folder tab on top-left
+			RECT rcTab = { mx - 7, my - 4, mx - 2, my };
+			Rectangle(hDC, rcTab.left, rcTab.top, rcTab.right, rcTab.bottom);
+			SelectObject(hDC, hPrev);
+			SelectObject(hDC, hPrevBr);
+			DeleteObject(hFolderPen);
+			DeleteObject(hFolderBr);
+
+			// Two solid black up-arrows; tips sit ABOVE the folder top (rcFolder.top = my - 1)
+			HPEN hBlackPen = CreatePen(PS_SOLID, 1, RGB(0, 0, 0));
+			HBRUSH hBlackBr = CreateSolidBrush(RGB(0, 0, 0));
+			HPEN hPrevP = (HPEN)SelectObject(hDC, hBlackPen);
+			HBRUSH hPrevB = (HBRUSH)SelectObject(hDC, hBlackBr);
+
+			int folderTop = my - 1;
+			int tipY = folderTop - 2;     // arrow tips above folder top
+			int baseY = my + 5;           // arrow bases near folder bottom
+			int leftCx = mx - 3;
+			int rightCx = mx + 3;
+			int halfW = 2;                // arrowhead half-width
+
+			// Left arrow: triangular head + 1px shaft
+			POINT tri1[3] = {
+				{ leftCx - halfW, tipY + halfW + 1 },
+				{ leftCx + halfW + 1, tipY + halfW + 1 },
+				{ leftCx, tipY }
+			};
+			Polygon(hDC, tri1, 3);
+			// Left shaft (1 px wide)
+			RECT rcShaft1 = { leftCx, tipY + halfW + 1, leftCx + 1, baseY };
+			FillRect(hDC, &rcShaft1, hBlackBr);
+
+			// Right arrow
+			POINT tri2[3] = {
+				{ rightCx - halfW, tipY + halfW + 1 },
+				{ rightCx + halfW + 1, tipY + halfW + 1 },
+				{ rightCx, tipY }
+			};
+			Polygon(hDC, tri2, 3);
+			RECT rcShaft2 = { rightCx, tipY + halfW + 1, rightCx + 1, baseY };
+			FillRect(hDC, &rcShaft2, hBlackBr);
+
+			SelectObject(hDC, hPrevP);
+			SelectObject(hDC, hPrevB);
+			DeleteObject(hBlackPen);
+			DeleteObject(hBlackBr);
 		}
 		break;
 	}
@@ -391,8 +444,10 @@ void CDirSideBySideHeaderBar::Resize(int widths[])
 /**
  * @brief Layout controls to match splitter column positions.
  *
- * Per-pane layout (BC order): [ComboBox][Back][Forward][Up][Browse]
- * The combo takes all available width minus 4*BTN_W for buttons.
+ * Left pane layout:  [ComboBox][Back][Forward][Up][Browse][UpBoth]
+ * Right pane layout: [ComboBox][Back][Forward][Up][Browse]
+ * The UpBoth button sits at the right edge of the left pane,
+ * visually between the two panes.
  */
 void CDirSideBySideHeaderBar::Resize(int widths[], int offsets[])
 {
@@ -400,11 +455,10 @@ void CDirSideBySideHeaderBar::Resize(int widths[], int offsets[])
 		return;
 
 	const int comboH = BAR_HEIGHT;
-	const int btnCount = 4;  // Back, Forward, Up, Browse
+	const int btnCount = 4;  // Back, Forward, Up, Browse (per side)
 	const int buttonsW = btnCount * BTN_W;
+	const bool bHasUpBoth = (m_nPanes >= 2 && m_btnUpLevelBoth.GetSafeHwnd() != nullptr);
 
-	// Use DeferWindowPos for atomic repositioning (prevents flicker)
-	// m_nPanes * 5 controls + 1 center button
 	HDWP hDWP = ::BeginDeferWindowPos(m_nPanes * 5 + 1);
 	if (!hDWP)
 		return;
@@ -413,7 +467,9 @@ void CDirSideBySideHeaderBar::Resize(int widths[], int offsets[])
 	{
 		int x = offsets[pane];
 		int w = widths[pane];
-		int comboW = w - buttonsW - 1;
+		// Left pane reserves an extra BTN_W for the UpBoth button
+		int extra = (pane == 0 && bHasUpBoth) ? BTN_W : 0;
+		int comboW = w - buttonsW - extra - 1;
 		if (comboW < 80) comboW = 80;
 
 		if (m_comboPath[pane].GetSafeHwnd())
@@ -441,23 +497,15 @@ void CDirSideBySideHeaderBar::Resize(int widths[], int offsets[])
 			hDWP = ::DeferWindowPos(hDWP, m_btnBrowse[pane].m_hWnd, nullptr,
 				bx, PAD_Y, BTN_W, comboH,
 				SWP_NOZORDER | SWP_NOACTIVATE | SWP_NOCOPYBITS);
-	}
 
-	// Position center "Up Both" button between the two panes
-	if (m_btnUpLevelBoth.GetSafeHwnd() && m_nPanes >= 2)
-	{
-		int centerX = offsets[1] - BTN_W;
-		if (centerX < offsets[0] + widths[0] - BTN_W)
-			centerX = offsets[0] + widths[0] - BTN_W;
-		// Center the button in the gap between left and right panes
-		int gap = offsets[1] - (offsets[0] + widths[0]);
-		if (gap >= BTN_W)
-			centerX = offsets[0] + widths[0] + (gap - BTN_W) / 2;
-		else
-			centerX = offsets[1] - BTN_W;
-		hDWP = ::DeferWindowPos(hDWP, m_btnUpLevelBoth.m_hWnd, nullptr,
-			centerX, PAD_Y, BTN_W, comboH,
-			SWP_NOZORDER | SWP_NOACTIVATE | SWP_NOCOPYBITS);
+		// Place UpBoth at the right edge of the left pane
+		if (pane == 0 && bHasUpBoth)
+		{
+			bx += BTN_W;
+			hDWP = ::DeferWindowPos(hDWP, m_btnUpLevelBoth.m_hWnd, nullptr,
+				bx, PAD_Y, BTN_W, comboH,
+				SWP_NOZORDER | SWP_NOACTIVATE | SWP_NOCOPYBITS);
+		}
 	}
 
 	::EndDeferWindowPos(hDWP);
@@ -530,6 +578,9 @@ void CDirSideBySideHeaderBar::OnComboSelChange(UINT id)
 	}
 }
 
+void CDirSideBySideHeaderBar::OnComboSelChangeLeft()  { OnComboSelChange(IDC_SXS_COMBO_LEFT); }
+void CDirSideBySideHeaderBar::OnComboSelChangeRight() { OnComboSelChange(IDC_SXS_COMBO_RIGHT); }
+
 // --- Button handlers ---
 
 void CDirSideBySideHeaderBar::OnBackLeft()     { if (m_backCallbackfunc)    m_backCallbackfunc(0); }
@@ -578,44 +629,48 @@ void CDirSideBySideHeaderBar::AddPathToHistory(int pane, const String& sPath)
 	}
 }
 
-// --- WindowProc: intercept WM_COMMAND before CControlBar routing ---
+// --- OnCommand: intercept BN_CLICKED before CControlBar routes to parent frame ---
 
-LRESULT CDirSideBySideHeaderBar::WindowProc(UINT message, WPARAM wParam, LPARAM lParam)
+BOOL CDirSideBySideHeaderBar::OnCommand(WPARAM wParam, LPARAM lParam)
 {
-	if (message == WM_COMMAND)
-	{
-		UINT nID = LOWORD(wParam);
-		int nCode = HIWORD(wParam);
+	UINT nID = LOWORD(wParam);
+	int nCode = HIWORD(wParam);
 
-		// Handle button clicks
-		if (nCode == BN_CLICKED && lParam != 0)
+	// Control notification (lParam != 0 means WM_COMMAND came from a child control)
+	if (lParam != 0)
+	{
+		if (nCode == BN_CLICKED)
 		{
 			switch (nID)
 			{
-			case IDC_SXS_BACK_LEFT:     OnBackLeft(); return 0;
-			case IDC_SXS_BACK_RIGHT:    OnBackRight(); return 0;
-			case IDC_SXS_FORWARD_LEFT:  OnForwardLeft(); return 0;
-			case IDC_SXS_FORWARD_RIGHT: OnForwardRight(); return 0;
-			case IDC_SXS_BROWSE_LEFT:   OnBrowseLeft(); return 0;
-			case IDC_SXS_BROWSE_RIGHT:  OnBrowseRight(); return 0;
-			case IDC_SXS_UPLEVEL_LEFT:  OnUpLevelLeft(); return 0;
-			case IDC_SXS_UPLEVEL_RIGHT: OnUpLevelRight(); return 0;
-			case IDC_SXS_UPLEVEL_BOTH:  OnUpLevelBoth(); return 0;
+			case IDC_SXS_BACK_LEFT:     OnBackLeft();     return TRUE;
+			case IDC_SXS_BACK_RIGHT:    OnBackRight();    return TRUE;
+			case IDC_SXS_FORWARD_LEFT:  OnForwardLeft();  return TRUE;
+			case IDC_SXS_FORWARD_RIGHT: OnForwardRight(); return TRUE;
+			case IDC_SXS_UPLEVEL_LEFT:  OnUpLevelLeft();  return TRUE;
+			case IDC_SXS_UPLEVEL_RIGHT: OnUpLevelRight(); return TRUE;
+			case IDC_SXS_BROWSE_LEFT:   OnBrowseLeft();   return TRUE;
+			case IDC_SXS_BROWSE_RIGHT:  OnBrowseRight();  return TRUE;
+			case IDC_SXS_UPLEVEL_BOTH:  OnUpLevelBoth();  return TRUE;
 			}
 		}
-
-		// Handle combo selection change
-		if (nCode == CBN_SELCHANGE)
+		else if (nCode == CBN_SELCHANGE)
 		{
 			if (nID == IDC_SXS_COMBO_LEFT || nID == IDC_SXS_COMBO_RIGHT)
 			{
 				OnComboSelChange(nID);
-				return 0;
+				return TRUE;
 			}
 		}
 	}
 
-	// --- Hover tracking for owner-draw buttons ---
+	return __super::OnCommand(wParam, lParam);
+}
+
+// --- WindowProc: hover tracking for owner-draw buttons ---
+
+LRESULT CDirSideBySideHeaderBar::WindowProc(UINT message, WPARAM wParam, LPARAM lParam)
+{
 	if (message == WM_MOUSEMOVE)
 	{
 		POINT pt = { GET_X_LPARAM(lParam), GET_Y_LPARAM(lParam) };

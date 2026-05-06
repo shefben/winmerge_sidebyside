@@ -32,6 +32,10 @@ public:
 
 	BOOL Create(CWnd* pParentWnd);
 	virtual CSize CalcFixedLayout(BOOL bStretch, BOOL bHorz);
+	// Suppress MFC's default auto-disable of dialog-bar controls that have no
+	// ON_UPDATE_COMMAND_UI handler in the frame. Our buttons are wired via
+	// std::function callbacks, not the command-UI system, so they must stay enabled.
+	virtual void OnUpdateCmdUI(CFrameWnd* pTarget, BOOL bDisableIfNoHndler) override {}
 
 	enum { IDD = IDD_EDITOR_HEADERBAR };
 
@@ -71,20 +75,23 @@ public:
 
 protected:
 	virtual LRESULT WindowProc(UINT message, WPARAM wParam, LPARAM lParam) override;
+	virtual BOOL OnCommand(WPARAM wParam, LPARAM lParam) override;
 	virtual BOOL PreTranslateMessage(MSG* pMsg) override;
 	afx_msg BOOL OnEraseBkgnd(CDC* pDC);
 	afx_msg HBRUSH OnCtlColor(CDC* pDC, CWnd* pWnd, UINT nCtlColor);
 	afx_msg void OnDrawItem(int nIDCtl, LPDRAWITEMSTRUCT lpDIS);
 	void OnComboSelChange(UINT id);
-	void OnBackLeft();
-	void OnBackRight();
-	void OnForwardLeft();
-	void OnForwardRight();
-	void OnBrowseLeft();
-	void OnBrowseRight();
-	void OnUpLevelLeft();
-	void OnUpLevelRight();
-	void OnUpLevelBoth();
+	afx_msg void OnComboSelChangeLeft();
+	afx_msg void OnComboSelChangeRight();
+	afx_msg void OnBackLeft();
+	afx_msg void OnBackRight();
+	afx_msg void OnForwardLeft();
+	afx_msg void OnForwardRight();
+	afx_msg void OnBrowseLeft();
+	afx_msg void OnBrowseRight();
+	afx_msg void OnUpLevelLeft();
+	afx_msg void OnUpLevelRight();
+	afx_msg void OnUpLevelBoth();
 	DECLARE_MESSAGE_MAP()
 
 private:
